@@ -1,0 +1,20 @@
+/**
+ * Routes Registry
+ * Registers all API routes
+ */
+
+import type { Express } from 'express';
+import { registerProjectRoutes } from './projects';
+import { registerFileRoutes } from './files';
+import { registerSearchRoutes } from './search';
+import { registerGitRoutes } from './git';
+import { registerAnalysisRoutes } from './analysis';
+
+export function registerRoutes(app: Express): void {
+  // Register route modules
+  registerProjectRoutes(app);
+  registerFileRoutes(app);
+  registerSearchRoutes(app);
+  registerGitRoutes(app);
+  registerAnalysisRoutes(app);
+}

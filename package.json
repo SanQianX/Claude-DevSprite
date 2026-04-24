@@ -1,0 +1,39 @@
+{
+  "name": "claude-dev-sprite",
+  "version": "0.1.0",
+  "description": "Auto-detect Git commits and generate knowledge base docs",
+  "main": "dist/worker/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx --watch src/worker/index.ts",
+    "start": "node dist/worker/index.js",
+    "test": "vitest",
+    "daemon:start": "node dev-scripts/daemon.js start",
+    "daemon:stop": "node dev-scripts/daemon.js stop",
+    "daemon:status": "node dev-scripts/daemon.js status",
+    "daemon:restart": "node dev-scripts/daemon.js restart"
+  },
+  "keywords": [
+    "git",
+    "knowledge-base",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "express": "^4.18.2",
+    "gray-matter": "^4.0.3",
+    "highlight.js": "^11.9.0",
+    "marked": "^12.0.1",
+    "simple-git": "^3.23.0",
+    "sql.js": "^1.11.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.4.0"
+  }
+}

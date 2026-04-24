@@ -1,0 +1,34 @@
+# Claude Code 开发过程产物（不提交到 Git）
+agent-comms/
+test-results/
+dev-scripts/screenshots/
+progress.json
+context-snapshot.md
+.claude/
+
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+web/dist/
+
+# 守护进程 PID 和日志
+dev-scripts/worker.pid
+dev-scripts/worker-stdout.log
+dev-scripts/worker-stderr.log
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# 测试数据（包含嵌套 git 仓库）
+test-data/
+
+# 环境变量
+.env
+.env.local

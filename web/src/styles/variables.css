@@ -1,0 +1,66 @@
+/* GitHub 风格配色 */
+:root {
+  /* 主色调 */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f6f8fa;
+  --color-bg-tertiary: #f0f2f5;
+
+  /* 文字色 */
+  --color-text-primary: #1f2328;
+  --color-text-secondary: #656d76;
+  --color-text-link: #0969da;
+
+  /* 边框 */
+  --color-border: #d0d7de;
+  --color-border-light: #e8ecf1;
+
+  /* 代码块 */
+  --color-code-bg: #f6f8fa;
+  --color-code-text: #1f2328;
+
+  /* 高亮 */
+  --color-highlight: #fff8c5;
+  --color-accent: #0969da;
+
+  /* 文件图标色 */
+  --color-folder: #54aeff;
+  --color-md-file: #8250df;
+  --color-source-file: #656d76;
+
+  /* 间距 */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+
+  /* 圆角 */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+
+  /* 字体 */
+  --font-family-sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* 过渡 */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+}
+
+/* 暗色主题（预留） */
+[data-theme="dark"] {
+  --color-bg-primary: #0d1117;
+  --color-bg-secondary: #161b22;
+  --color-bg-tertiary: #21262d;
+  --color-text-primary: #c9d1d9;
+  --color-text-secondary: #8b949e;
+  --color-text-link: #58a6ff;
+  --color-border: #30363d;
+  --color-code-bg: #161b22;
+  --color-code-text: #c9d1d9;
+}
