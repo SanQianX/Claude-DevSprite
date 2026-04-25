@@ -1,7 +1,141 @@
 import * as path from 'path';
+import * as os from 'os';
 
-export const config = {
-  port: 38888,
-  dbPath: path.join(__dirname, '../data/dev-sprite.db'),
-  knowledgeRoot: process.env.KNOWLEDGE_ROOT || path.join(__dirname, '../test-data/knowledge-base'),
-};
+export interface ProjectDiscoveryConfig {
+  /** Directories to scan for projects */
+  scanPaths: string[];
+  /** Patterns to identify project repositories */
+  repoPatterns: string[];
+  /** Knowledge directory name within each project */
+  knowledgeDirName: string;
+  /** Auto-discover on startup */
+  autoDiscover: boolean;
+  /** Maximum scan depth */
+  maxDepth: number;
+}
+
+export interface ServerConfig {
+  port: number;
+  host: string;
+}
+
+export interface KnowledgeConfig {
+  directoryName: string;
+  autoCommit: boolean;
+  commitMessageTemplate: string;
+}
+
+export interface AnalysisConfig {
+  mode: 'incremental' | 'full';
+  fullAnalysisIntervalDays: number;
+  fullAnalysisTriggers: {
+    newFilesThreshold: number;
+    dependencyFilePatterns: string[];
+    commitMessageKeywords: string[];
+  };
+  diffMaxTokens: number;
+  maxRetries: number;
+  retryBaseDelayMs: number;
+}
+
+export interface DetectionConfig {
+  preferredStrategy: 'hook' | 'watcher' | 'poller';
+  fallbackStrategies: Array<'hook' | 'watcher' | 'poller'>;
+  pollerIntervalMs: number;
+  dedupWindowMs: number;
+}
+
+export interface WebConfig {
+  enabled: boolean;
+  autoOpen: boolean;
+}
+
+export interface LoggingConfig {
+  level: 'debug' | 'info' | 'warn' | 'error';
+  file?: string;
+}
+
+export interface Config {
+  server: ServerConfig;
+  knowledge: KnowledgeConfig;
+  analysis: AnalysisConfig;
+  detection: DetectionConfig;
+  web: WebConfig;
+  logging: LoggingConfig;
+  projectDiscovery: ProjectDiscoveryConfig;
+}
+
+const getDefaultConfig = (): Config => ({
+  server: {
+    port: 38888,
+    host: 'localhost',
+  },
+  knowledge: {
+    directoryName: 'knowledge',
+    autoCommit: false,
+    commitMessageTemplate: 'docs(knowledge): update knowledge base [auto]',
+  },
+  analysis: {
+    mode: 'incremental',
+    fullAnalysisIntervalDays: 30,
+    fullAnalysisTriggers: {
+      newFilesThreshold: 10,
+      dependencyFilePatterns: ['package.json', 'requirements.txt', 'Cargo.toml', 'go.mod'],
+      commitMessageKeywords: ['[major]', '[breaking]', '[architecture]', '[refactor]'],
+    },
+    diffMaxTokens: 8000,
+    maxRetries: 3,
+    retryBaseDelayMs: 1000,
+  },
+  detection: {
+    preferredStrategy: 'hook',
+    fallbackStrategies: ['watcher', 'poller'],
+    pollerIntervalMs: 5000,
+    dedupWindowMs: 5000,
+  },
+  web: {
+    enabled: true,
+    autoOpen: false,
+  },
+  logging: {
+    level: 'info',
+    file: path.join(os.homedir(), '.claude', 'claude-dev-sprite', 'logs', 'app.log'),
+  },
+  projectDiscovery: {
+    // Default scan paths: common project directories
+    scanPaths: [
+      process.cwd(),
+      path.join(os.homedir(), 'Projects'),
+      path.join(os.homedir(), 'code'),
+      path.join(os.homedir(), 'dev'),
+      path.join(os.homedir(), 'workspace'),
+    ].filter(p => {
+      try {
+        return require('fs').existsSync(p);
+      } catch {
+        return false;
+      }
+    }),
+    repoPatterns: ['.git'], // Look for .git directory
+    knowledgeDirName: 'knowledge',
+    autoDiscover: true,
+    maxDepth: 3,
+  },
+});
+
+// Default configuration
+export const config: Config = getDefaultConfig();
+
+// Database path (kept separate as it's for the DevSprite system, not per-project)
+export const dbPath: string = path.join(os.homedir(), '.claude', 'claude-dev-sprite', 'data', 'dev-sprite.db');
+
+// Ensure data directory exists
+try {
+  const fs = require('fs');
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+} catch (error) {
+  // Ignore errors during initialization
+}

@@ -6,6 +6,12 @@
 import { startServer } from './server';
 import { logger } from '../utils/logger';
 
+// Catch unhandled promise rejections to prevent crash
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection:', reason);
+  // Don't crash - log and continue
+});
+
 /**
  * Start the worker service
  */

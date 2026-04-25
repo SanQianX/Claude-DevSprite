@@ -8,8 +8,8 @@ import type { Express, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import matter from 'gray-matter';
-import { config } from '../../config';
-import { createError } from '../middleware/errorHandler';
+import { getProjectDiscoveryService } from '../../services/projectDiscovery';
+import { asyncHandler, createError } from '../middleware/errorHandler';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('search');
@@ -28,7 +28,7 @@ export function registerSearchRoutes(app: Express): void {
    * GET /api/search
    * Cross-project search
    */
-  app.get('/api/search', (req: Request, res: Response) => {
+  app.get('/api/search', asyncHandler(async (req: Request, res: Response) => {
     const { q } = req.query;
 
     if (!q || typeof q !== 'string') {
@@ -39,26 +39,17 @@ export function registerSearchRoutes(app: Express): void {
       const allResults: Array<{ projectName: string } & SearchResult> = [];
 
       // Get all projects
-      if (!fs.existsSync(config.knowledgeRoot)) {
-        res.json({ query: q, results: [] });
-        return;
-      }
+      const projectDiscovery = getProjectDiscoveryService();
+      const projects = await projectDiscovery.getAllProjects();
 
-      const entries = fs.readdirSync(config.knowledgeRoot, { withFileTypes: true });
-
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const projectPath = path.join(config.knowledgeRoot, entry.name);
-          const knowledgePath = path.join(projectPath, 'knowledge');
-
-          if (fs.existsSync(knowledgePath)) {
-            const projectResults = searchInDirectory(knowledgePath, q);
-            for (const result of projectResults) {
-              allResults.push({
-                projectName: entry.name,
-                ...result
-              });
-            }
+      for (const project of projects) {
+        if (fs.existsSync(project.knowledgePath)) {
+          const projectResults = searchInDirectory(project.knowledgePath, q);
+          for (const result of projectResults) {
+            allResults.push({
+              projectName: project.name,
+              ...result
+            });
           }
         }
       }
@@ -68,13 +59,13 @@ export function registerSearchRoutes(app: Express): void {
       logger.error('Error in cross-project search', error);
       throw createError('Search failed', 500, error);
     }
-  });
+  }));
 
   /**
    * GET /api/projects/:name/search
    * Project-specific search
    */
-  app.get('/api/projects/:name/search', (req: Request, res: Response) => {
+  app.get('/api/projects/:name/search', asyncHandler(async (req: Request, res: Response) => {
     const { name } = req.params;
     const { q } = req.query;
 
@@ -83,23 +74,28 @@ export function registerSearchRoutes(app: Express): void {
     }
 
     try {
-      const projectPath = path.join(config.knowledgeRoot, name);
-      const knowledgePath = path.join(projectPath, 'knowledge');
+      const projectDiscovery = getProjectDiscoveryService();
+      const project = await projectDiscovery.getProject(name);
 
-      if (!fs.existsSync(knowledgePath)) {
+      if (!project) {
+        throw createError('Project not found', 404);
+      }
+
+      if (!fs.existsSync(project.knowledgePath)) {
         throw createError('Project knowledge directory not found', 404);
       }
 
-      const results = searchInDirectory(knowledgePath, q);
+      const results = searchInDirectory(project.knowledgePath, q);
       res.json({ projectName: name, query: q, results });
-    } catch (error: any) {
-      if (error.statusCode) {
+    } catch (error: unknown) {
+      if (error instanceof Error && 'statusCode' in error) {
         throw error;
       }
+      const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Error in project search', error);
       throw createError('Search failed', 500, error);
     }
-  });
+  }));
 }
 
 function searchInDirectory(dirPath: string, query: string, rootPath?: string): SearchResult[] {
@@ -142,7 +138,7 @@ function searchInFile(filePath: string, query: string, rootPath: string): Search
     const queryLower = query.toLowerCase();
 
     // Check if file matches
-    const relativePath = path.relative(rootPath, filePath);
+    const relativePath = path.relative(rootPath, filePath).replace(/\\/g, '/');
     const matchesInContent = (markdown.toLowerCase().match(new RegExp(queryLower, 'g')) || []).length;
     const matchesInTitle = path.basename(filePath).toLowerCase().includes(queryLower) ? 1 : 0;
     const totalMatches = matchesInContent + matchesInTitle;
@@ -166,7 +162,7 @@ function searchInFile(filePath: string, query: string, rootPath: string): Search
       title,
       snippet,
       matches: totalMatches,
-      category: (meta as any).category
+      category: (meta as Record<string, unknown>).category as string | undefined
     };
   } catch (error) {
     return null;

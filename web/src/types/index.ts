@@ -23,6 +23,7 @@ export interface Project {
   description?: string
   lastUpdated?: string
   documentCount: number
+  color?: string
 }
 
 export interface ProjectDetail extends Project {
@@ -42,7 +43,7 @@ export interface FileTreeNode {
 
 export interface FileTreeResponse {
   projectName: string
-  tree: FileTreeNode
+  tree: FileTreeNode[]
 }
 
 // ========================================

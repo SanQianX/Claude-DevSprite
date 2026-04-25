@@ -1,5 +1,7 @@
 <template>
   <div class="home-page">
+    <AppHeader />
+
     <header class="home-header">
       <h1 class="home-title">DevSprite Knowledge Base</h1>
       <p class="home-subtitle">AI-powered development documentation hub</p>
@@ -29,13 +31,15 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useProjectsStore } from '@/stores/projects'
 import ProjectList from '@/components/home/ProjectList.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import AppHeader from '@/components/layout/AppHeader.vue'
 
 const projectsStore = useProjectsStore()
-const { projects, loading, error } = projectsStore
+const { projects, loading, error } = storeToRefs(projectsStore)
 const { fetchProjects } = projectsStore
 
 onMounted(() => {

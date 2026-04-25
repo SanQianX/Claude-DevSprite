@@ -47,6 +47,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useUIStore } from '@/stores/ui'
 import { useSearchStore } from '@/stores/search'
 import SearchBar from '@/components/common/SearchBar.vue'
@@ -55,7 +56,7 @@ const router = useRouter()
 const route = useRoute()
 const uiStore = useUIStore()
 const searchStore = useSearchStore()
-const { sidebarOpen } = uiStore
+const { sidebarOpen } = storeToRefs(uiStore)
 
 const searchQuery = ref('')
 
@@ -63,13 +64,17 @@ function toggleSidebar() {
   uiStore.toggleSidebar()
 }
 
-async function handleSearch(query: string) {
-  const projectName = route.params.projectName as string
-  if (projectName) {
-    await searchStore.searchProject(projectName, query)
-  } else {
-    await searchStore.searchAllProjects(query)
+async function handleSearch(q: string) {
+  if (!q.trim()) {
+    searchStore.clearResults()
+    return
   }
+  const projectName = route.params.projectName as string
+  const searchParams: Record<string, string> = { q }
+  if (projectName) {
+    searchParams.project = projectName
+  }
+  router.push({ name: 'search', query: searchParams })
 }
 </script>
 

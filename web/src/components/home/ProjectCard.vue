@@ -2,31 +2,27 @@
   <router-link
     :to="`/project/${project.name}`"
     class="project-card"
-    :style="{ '--project-color': project.color }"
+    :style="{ '--project-color': project.color || '#3b82f6' }"
   >
     <div class="project-card-header">
-      <div class="project-icon" :style="{ backgroundColor: project.color }">
+      <div class="project-icon">
         {{ project.name.charAt(0).toUpperCase() }}
       </div>
       <h3 class="project-name">{{ project.name }}</h3>
     </div>
 
-    <p class="project-description">{{ project.description }}</p>
+    <p class="project-description">{{ project.description || 'No description' }}</p>
 
     <div class="project-stats">
       <div class="project-stat">
         <span class="stat-label">Documents</span>
         <span class="stat-value">{{ project.documentCount }}</span>
       </div>
-      <div class="project-stat">
-        <span class="stat-label">Analyses</span>
-        <span class="stat-value">{{ project.analysisCount }}</span>
-      </div>
     </div>
 
     <div class="project-footer">
       <span class="project-path">{{ project.path }}</span>
-      <span class="project-updated">{{ formatDate(project.lastUpdated) }}</span>
+      <span class="project-updated">{{ formatDate(project.lastUpdated || '') }}</span>
     </div>
   </router-link>
 </template>
@@ -89,6 +85,7 @@ function formatDate(dateString: string): string {
   font-weight: 600;
   font-size: 18px;
   color: white;
+  background-color: var(--project-color, #3b82f6);
 }
 
 .project-name {

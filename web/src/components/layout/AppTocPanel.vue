@@ -15,7 +15,10 @@
         :key="item.id"
         :href="`#${item.id}`"
         class="toc-link"
-        :class="`toc-link--level-${item.level}`"
+        :class="[
+          `toc-link--level-${item.level}`,
+          { 'toc-link--active': activeHeadingId === item.id }
+        ]"
         @click.prevent="scrollToHeading(item.id)"
       >
         {{ item.text }}
@@ -29,13 +32,13 @@
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { useKnowledgeStore } from '@/stores/knowledge'
 import { useUIStore } from '@/stores/ui'
-import type { TocItem } from '@/types'
 
 const knowledgeStore = useKnowledgeStore()
 const uiStore = useUIStore()
-const { toc } = knowledgeStore
+const { toc, activeHeadingId } = storeToRefs(knowledgeStore)
 
 function toggleTocPanel() {
   uiStore.toggleTocPanel()
@@ -45,6 +48,7 @@ function scrollToHeading(id: string) {
   const element = document.getElementById(id)
   if (element) {
     element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    knowledgeStore.setActiveHeading(id)
   }
 }
 </script>
@@ -103,13 +107,19 @@ function scrollToHeading(id: string) {
   text-decoration: none;
   font-size: 14px;
   line-height: 1.4;
-  transition: color var(--transition-fast);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
   border-left: 2px solid transparent;
   padding-left: 0;
 }
 
 .toc-link:hover {
   color: var(--color-primary);
+}
+
+.toc-link--active {
+  color: var(--color-primary);
+  border-left-color: var(--color-primary);
+  font-weight: 500;
 }
 
 .toc-link--level-1 {

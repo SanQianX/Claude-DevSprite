@@ -16,6 +16,7 @@
 
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useProjectsStore } from '@/stores/projects'
 import { useKnowledgeStore } from '@/stores/knowledge'
 import { onMounted, watch } from 'vue'
@@ -27,12 +28,18 @@ import { useUIStore } from '@/stores/ui'
 const route = useRoute()
 const projectsStore = useProjectsStore()
 const knowledgeStore = useKnowledgeStore()
-const { sidebarOpen, tocPanelOpen } = useUIStore()
+const uiStore = useUIStore()
+const { sidebarOpen, tocPanelOpen } = storeToRefs(uiStore)
 
 onMounted(async () => {
   const projectName = route.params.projectName as string
-  const project = projectsStore.getProjectByName(projectName)
 
+  // Fetch projects list if empty (e.g. direct navigation via SPA fallback)
+  if (projectsStore.projects.length === 0) {
+    await projectsStore.fetchProjects()
+  }
+
+  const project = projectsStore.getProjectByName(projectName)
   if (project) {
     projectsStore.setCurrentProject(project)
     await knowledgeStore.fetchFileTree(projectName)

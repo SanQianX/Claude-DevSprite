@@ -36,11 +36,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import type { TreeNode } from '@/types'
+import type { FileTreeNode } from '@/types'
 import { useKnowledgeStore } from '@/stores/knowledge'
 
 const props = defineProps<{
-  node: TreeNode
+  node: FileTreeNode
   level: number
 }>()
 

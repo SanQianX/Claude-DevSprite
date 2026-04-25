@@ -10,13 +10,20 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const expandedPaths = ref<Set<string>>(new Set())
+  const activeHeadingId = ref<string | null>(null)
 
   async function fetchFileTree(projectName: string) {
     loading.value = true
     error.value = null
     try {
       const response = await projectsApi.getProjectTree(projectName)
-      fileTree.value = response.tree
+      // Wrap array of nodes in a synthetic root node for the FileTree component
+      fileTree.value = {
+        name: projectName,
+        type: 'directory',
+        path: '',
+        children: response.tree
+      }
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Unknown error'
     } finally {
@@ -42,13 +49,17 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     const items: TocItem[] = []
     const lines = content.split('\n')
 
-    lines.forEach((line, index) => {
+    lines.forEach((line) => {
       const match = line.match(/^(#{1,6})\s+(.+)$/)
       if (match) {
         const level = match[1].length
         const text = match[2].trim()
+        const slug = text
+          .toLowerCase()
+          .replace(/[^\w\u4e00-\u9fff]+/g, '-')
+          .replace(/^-+|-+$/g, '')
         items.push({
-          id: `heading-${index}`,
+          id: `heading-${slug}-${level}`,
           text,
           level
         })
@@ -73,6 +84,11 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   function clearDocument() {
     currentDocument.value = null
     toc.value = []
+    activeHeadingId.value = null
+  }
+
+  function setActiveHeading(id: string) {
+    activeHeadingId.value = id
   }
 
   return {
@@ -82,11 +98,13 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     loading,
     error,
     expandedPaths,
+    activeHeadingId,
     fetchFileTree,
     fetchDocument,
     generateToc,
     togglePath,
     isPathExpanded,
-    clearDocument
+    clearDocument,
+    setActiveHeading
   }
 })

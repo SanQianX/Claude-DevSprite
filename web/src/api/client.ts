@@ -19,18 +19,29 @@ async function request<T>(
       ...options
     })
 
-    const data = await response.json()
+    // Try to parse JSON, but handle parsing errors gracefully
+    let data: unknown
+    try {
+      data = await response.json()
+    } catch (parseError) {
+      // If JSON parsing fails, treat response body as error message
+      const text = await response.text()
+      return {
+        success: false,
+        error: text.substring(0, 200) || 'Invalid response from server'
+      }
+    }
 
     if (!response.ok) {
       return {
         success: false,
-        error: data.error || 'Request failed'
+        error: (data as { error?: string })?.error || 'Request failed'
       }
     }
 
     return {
       success: true,
-      data
+      data: data as T
     }
   } catch (error) {
     return {
@@ -42,12 +53,12 @@ async function request<T>(
 
 export const apiClient = {
   get: <T>(endpoint: string) => request<T>(endpoint, { method: 'GET' }),
-  post: <T>(endpoint: string, body: any) =>
+  post: <T>(endpoint: string, body: Record<string, unknown>) =>
     request<T>(endpoint, {
       method: 'POST',
       body: JSON.stringify(body)
     }),
-  put: <T>(endpoint: string, body: any) =>
+  put: <T>(endpoint: string, body: Record<string, unknown>) =>
     request<T>(endpoint, {
       method: 'PUT',
       body: JSON.stringify(body)

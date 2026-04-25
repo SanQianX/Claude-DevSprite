@@ -14,15 +14,12 @@
 
     <div v-else class="overview-content">
       <div class="overview-header">
-        <div
-          class="project-badge"
-          :style="{ backgroundColor: project.color }"
-        >
+        <div class="project-badge" :style="{ backgroundColor: project.color || '#3b82f6' }">
           {{ project.name.charAt(0).toUpperCase() }}
         </div>
         <div class="project-info">
           <h1 class="project-title">{{ project.name }}</h1>
-          <p class="project-description">{{ project.description }}</p>
+          <p class="project-description">{{ project.description || 'No description' }}</p>
           <p class="project-path">{{ project.path }}</p>
         </div>
       </div>
@@ -37,17 +34,9 @@
         </div>
 
         <div class="stat-card">
-          <div class="stat-icon">🔍</div>
-          <div class="stat-content">
-            <div class="stat-value">{{ project.analysisCount }}</div>
-            <div class="stat-label">Analyses</div>
-          </div>
-        </div>
-
-        <div class="stat-card">
           <div class="stat-icon">📅</div>
           <div class="stat-content">
-            <div class="stat-value">{{ formatDate(project.lastUpdated) }}</div>
+            <div class="stat-value">{{ formatDate(project.lastUpdated || '') }}</div>
             <div class="stat-label">Last Updated</div>
           </div>
         </div>
@@ -64,6 +53,7 @@
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { useProjectsStore } from '@/stores/projects'
 import { useKnowledgeStore } from '@/stores/knowledge'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -72,8 +62,8 @@ import FileTreeNode from '@/components/tree/FileTreeNode.vue'
 
 const projectsStore = useProjectsStore()
 const knowledgeStore = useKnowledgeStore()
-const { currentProject: project } = projectsStore
-const { fileTree, loading, error } = knowledgeStore
+const { currentProject: project } = storeToRefs(projectsStore)
+const { fileTree, loading, error } = storeToRefs(knowledgeStore)
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString)

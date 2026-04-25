@@ -106,17 +106,55 @@ function waitForHealth(maxWaitMs = 10000) {
 function spawnDaemon() {
   ensureLogDir();
 
+  // Collect auth-related env vars to pass to daemon
+  const authEnvVars = {};
+  const authKeys = [
+    'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL',
+    'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_MODEL',
+    'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL',
+    'ANTHROPIC_DEFAULT_HAIKU_MODEL', 'ANTHROPIC_SMALL_FAST_MODEL'
+  ];
+  for (const key of authKeys) {
+    if (process.env[key]) {
+      authEnvVars[key] = process.env[key];
+    }
+  }
+
+  // Write auth env to a file that the worker can read
+  const envFile = path.join(LOG_DIR, 'worker-env.json');
+  fs.writeFileSync(envFile, JSON.stringify(authEnvVars), 'utf8');
+
   if (process.platform === 'win32') {
     // Windows: Use PowerShell Start-Process for fully detached process
-    const psCommand = `Start-Process -FilePath 'node' -ArgumentList '${ENTRY_POINT.replace(/\\/g, '/')}' -WindowStyle Hidden -RedirectStandardOutput '${STDOUT_LOG.replace(/\\/g, '/')}' -RedirectStandardError '${STDERR_LOG.replace(/\\/g, '/')}'`;
-    execSync(`powershell -NoProfile -Command "${psCommand}"`, {
+    // Pass auth env vars via -Environment parameter (PowerShell 7+) or env file
+    const envArgs = Object.entries(authEnvVars)
+      .map(([k, v]) => `${k}='${v.replace(/'/g, "''")}'`)
+      .join('; ');
+
+    const psCommand = envArgs
+      ? `$env:${envArgs.split('; ').join('; $env:')}; Start-Process -FilePath 'node' -ArgumentList '${ENTRY_POINT.replace(/\\/g, '/')}' -WindowStyle Hidden -RedirectStandardOutput '${STDOUT_LOG.replace(/\\/g, '/')}' -RedirectStandardError '${STDERR_LOG.replace(/\\/g, '/')}'`
+      : `Start-Process -FilePath 'node' -ArgumentList '${ENTRY_POINT.replace(/\\/g, '/')}' -WindowStyle Hidden -RedirectStandardOutput '${STDOUT_LOG.replace(/\\/g, '/')}' -RedirectStandardError '${STDERR_LOG.replace(/\\/g, '/')}'`;
+
+    // Use a simpler approach: set env vars in a wrapper script
+    const wrapperScript = path.join(LOG_DIR, 'start-worker.cmd');
+    let cmd = '@echo off\n';
+    for (const [k, v] of Object.entries(authEnvVars)) {
+      cmd += `set "${k}=${v}"\n`;
+    }
+    cmd += `node "${ENTRY_POINT}"\n`;
+    fs.writeFileSync(wrapperScript, cmd, 'utf8');
+
+    const psCommand2 = `Start-Process -FilePath 'cmd.exe' -ArgumentList '/c "${wrapperScript.replace(/\\/g, '/')}"' -WindowStyle Hidden -RedirectStandardOutput '${STDOUT_LOG.replace(/\\/g, '/')}' -RedirectStandardError '${STDERR_LOG.replace(/\\/g, '/')}'`;
+    execSync(`powershell -NoProfile -Command "${psCommand2}"`, {
       stdio: 'ignore',
       windowsHide: true
     });
   } else {
     // Unix: Use detached spawn with setsid
+    const env = { ...process.env, ...authEnvVars };
     const child = spawn(process.execPath, [ENTRY_POINT], {
       detached: true,
+      env,
       stdio: [
         'ignore',
         fs.openSync(STDOUT_LOG, 'a'),

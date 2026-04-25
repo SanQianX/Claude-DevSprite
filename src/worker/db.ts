@@ -7,7 +7,7 @@ import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { config } from '../config';
+import { dbPath } from '../config';
 import { logger } from '../utils/logger';
 
 export interface Project {
@@ -87,7 +87,6 @@ export class DatabaseManager {
    * Initialize the database (must be called after constructor)
    */
   static async create(): Promise<DatabaseManager> {
-    const dbPath = config.dbPath;
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

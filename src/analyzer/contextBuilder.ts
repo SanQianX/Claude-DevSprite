@@ -4,7 +4,11 @@
  */
 
 import simpleGit from 'simple-git';
+import * as fs from 'fs';
+import * as path from 'path';
+import matter from 'gray-matter';
 import type { AnalysisContext, DiffEntry } from './types';
+import { config } from '../config';
 
 export class ContextBuilder {
   private git: ReturnType<typeof simpleGit>;
@@ -43,17 +47,78 @@ export class ContextBuilder {
 
   /**
    * Load relevant existing knowledge for context
-   * For now, this is a simplified version that returns empty array
-   * In a full implementation, this would query the database
+   * Finds documents that reference changed files or are in related categories
    */
   async loadRelevantKnowledge(changedFiles: string[]): Promise<string[]> {
-    // TODO: Implement database query for relevant documents
-    // This would involve:
-    // 1. Finding documents that reference the changed files
-    // 2. Finding documents in similar categories
-    // 3. Finding documents with related tags
+    const knowledgePath = path.join(this.repoPath, config.knowledge.directoryName);
+    if (!fs.existsSync(knowledgePath)) {
+      return [];
+    }
 
-    return [];
+    const knowledge: string[] = [];
+    const changedFileNames = changedFiles.map(f => path.basename(f).toLowerCase());
+    const changedDirs = changedFiles.map(f => path.dirname(f).toLowerCase());
+
+    try {
+      const files = this.walkDir(knowledgePath, '.md');
+      for (const filePath of files) {
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const { content: markdown } = matter(content);
+          const relativePath = path.relative(knowledgePath, filePath).replace(/\\/g, '/');
+
+          // Check if any changed file is referenced in this document
+          const markdownLower = markdown.toLowerCase();
+          const isRelevant = changedFiles.some(cf =>
+            markdownLower.includes(cf.toLowerCase()) ||
+            markdownLower.includes(path.basename(cf).toLowerCase())
+          );
+
+          // Also include if the doc is in a directory related to changed files
+          const isInRelevantDir = changedDirs.some(dir =>
+            relativePath.toLowerCase().includes(dir)
+          );
+
+          // Include overview docs always (they provide project context)
+          const isOverview = relativePath.includes('overview') || relativePath.includes('architecture');
+
+          if (isRelevant || isInRelevantDir || isOverview) {
+            // Truncate long documents to avoid context overflow
+            const truncated = markdown.length > 2000
+              ? markdown.substring(0, 2000) + '\n... (truncated)'
+              : markdown;
+            knowledge.push(`--- Document: ${relativePath} ---\n${truncated}`);
+          }
+        } catch {
+          // Skip files that can't be read
+        }
+      }
+    } catch (error) {
+      console.error('[ContextBuilder] Failed to load knowledge:', error);
+    }
+
+    return knowledge;
+  }
+
+  /**
+   * Walk directory and return matching files
+   */
+  private walkDir(dirPath: string, extension: string): string[] {
+    const results: string[] = [];
+    try {
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+          results.push(...this.walkDir(fullPath, extension));
+        } else if (entry.isFile() && entry.name.endsWith(extension)) {
+          results.push(fullPath);
+        }
+      }
+    } catch {
+      // Skip directories that can't be read
+    }
+    return results;
   }
 
   /**

@@ -19,7 +19,12 @@ export function errorHandler(
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal Server Error';
 
-  const errorResponse: any = {
+  const errorResponse: {
+    message: string;
+    status: number;
+    stack?: string;
+    details?: unknown;
+  } = {
     message,
     status: statusCode,
   };
@@ -40,4 +45,13 @@ export function createError(message: string, statusCode = 500, details?: unknown
   error.statusCode = statusCode;
   error.details = details;
   return error;
+}
+
+/**
+ * Wrap async route handlers to catch thrown errors and forward to error handler
+ */
+export function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
 }

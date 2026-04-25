@@ -7,6 +7,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/HomePage.vue')
   },
   {
+    path: '/search',
+    name: 'search',
+    component: () => import('@/views/SearchResults.vue')
+  },
+  {
     path: '/project/:projectName',
     component: () => import('@/views/ProjectLayout.vue'),
     children: [
@@ -22,6 +27,16 @@ const routes: RouteRecordRaw[] = [
         props: true
       }
     ]
+  },
+  {
+    path: '/project/:projectName/source',
+    name: 'source',
+    component: () => import('@/views/SourceView.vue')
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: () => import('@/views/HomePage.vue')
   }
 ]
 

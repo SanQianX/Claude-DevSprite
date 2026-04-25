@@ -1,6 +1,6 @@
 <template>
   <div class="file-tree">
-    <FileTreeNode
+    <FileTreeNodeComponent
       v-for="node in tree.children"
       :key="node.path"
       :node="node"
@@ -10,11 +10,11 @@
 </template>
 
 <script setup lang="ts">
-import type { TreeNode } from '@/types'
-import FileTreeNode from './FileTreeNode.vue'
+import type { FileTreeNode } from '@/types'
+import FileTreeNodeComponent from './FileTreeNode.vue'
 
 defineProps<{
-  tree: TreeNode
+  tree: FileTreeNode
 }>()
 </script>
 

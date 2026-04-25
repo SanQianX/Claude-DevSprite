@@ -32,6 +32,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useKnowledgeStore } from '@/stores/knowledge'
 import FileTree from '@/components/tree/FileTree.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -39,7 +40,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 
 const route = useRoute()
 const knowledgeStore = useKnowledgeStore()
-const { fileTree, loading, error } = knowledgeStore
+const { fileTree, loading, error } = storeToRefs(knowledgeStore)
 
 async function refreshTree() {
   const projectName = route.params.projectName as string

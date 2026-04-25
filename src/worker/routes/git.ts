@@ -5,33 +5,46 @@
  */
 
 import type { Express, Request, Response } from 'express';
-import { CommitDetectorManager } from '../../detectors';
-
-// Global detector manager (will be initialized by worker server)
-let detectorManager: CommitDetectorManager | null = null;
+import { asyncHandler } from '../middleware/errorHandler';
+import { getAllProjectDetectors } from '../detectorRegistry';
 
 export function registerGitRoutes(app: Express): void {
   /**
    * POST /api/git/hook-notify
    * Internal endpoint called by post-commit hook script
    */
-  app.post('/api/git/hook-notify', async (req: Request, res: Response) => {
+  app.post('/api/git/hook-notify', asyncHandler(async (req: Request, res: Response, next) => {
     const { repoPath, commitHash } = req.body;
 
     if (!repoPath || !commitHash) {
-      return res.status(400).json({ error: 'Missing repoPath or commitHash' });
+      res.status(400).json({ error: 'Missing repoPath or commitHash' });
+      return;
     }
 
     try {
-      // If we have a detector manager and it's using post-commit-hook, handle the notification
-      if (detectorManager) {
-        const activeDetector = (detectorManager as any).activeDetector;
-        console.log(`[GitRoutes] Hook notify received: repoPath=${repoPath}, commitHash=${commitHash}, detector=${activeDetector?.name}`);
-        if (activeDetector && activeDetector.name === 'post-commit-hook') {
-          await activeDetector.handleHookNotification(commitHash);
+      // Find the detector for this repo
+      const detectors = getAllProjectDetectors();
+      let foundDetector = false;
+
+      for (const [projectName, entry] of detectors) {
+        // Normalize paths for comparison
+        const normalizedRepoPath = repoPath.replace(/\\/g, '/').replace(/\/$/, '');
+        const normalizedEntryPath = entry.repoPath.replace(/\\/g, '/').replace(/\/$/, '');
+
+        if (normalizedEntryPath === normalizedRepoPath || normalizedRepoPath.startsWith(normalizedEntryPath)) {
+          const activeDetector = (entry.detector as any).activeDetector;
+          console.log(`[GitRoutes] Hook notify received for project ${projectName}: commitHash=${commitHash}, detector=${activeDetector?.name}`);
+
+          if (activeDetector && activeDetector.name === 'post-commit-hook') {
+            await activeDetector.handleHookNotification(commitHash);
+          }
+          foundDetector = true;
+          break;
         }
-      } else {
-        console.log(`[GitRoutes] Hook notify received but no detector manager`);
+      }
+
+      if (!foundDetector) {
+        console.log(`[GitRoutes] No detector found for repo: ${repoPath}`);
       }
 
       res.json({ success: true });
@@ -39,29 +52,39 @@ export function registerGitRoutes(app: Express): void {
       console.error('[GitRoutes] Error handling hook notify:', error);
       res.status(500).json({ error: 'Failed to handle hook notification' });
     }
-  });
+  }));
 
   /**
    * GET /api/git/status
-   * Get current detector status
+   * Get current detector status for all projects
    */
   app.get('/api/git/status', (req: Request, res: Response) => {
-    if (!detectorManager) {
+    const detectors = getAllProjectDetectors();
+
+    if (detectors.size === 0) {
       return res.json({
         activeDetector: null,
-        fallbackReason: 'Detector manager not initialized',
+        fallbackReason: 'No projects detected',
         isRunning: false,
+        projects: [],
       });
     }
 
-    const status = detectorManager.getStatus();
-    res.json(status);
-  });
-}
+    const projects = Array.from(detectors.entries()).map(([name, entry]) => {
+      const status = entry.detector.getStatus();
+      return {
+        name,
+        ...status,
+      };
+    });
 
-/**
- * Set the detector manager (called by worker server during initialization)
- */
-export function setDetectorManager(manager: CommitDetectorManager): void {
-  detectorManager = manager;
+    // For backwards compatibility, return first project's detector as primary
+    const firstEntry = detectors.values().next().value;
+    const primaryStatus = firstEntry ? firstEntry.detector.getStatus() : { activeDetector: null, isRunning: false };
+
+    res.json({
+      ...primaryStatus,
+      projects,
+    });
+  });
 }

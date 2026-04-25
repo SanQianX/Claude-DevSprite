@@ -9,6 +9,9 @@ import { registerFileRoutes } from './files';
 import { registerSearchRoutes } from './search';
 import { registerGitRoutes } from './git';
 import { registerAnalysisRoutes } from './analysis';
+import { registerRelationRoutes } from './relations';
+import { registerConfigRoutes } from './config';
+import { registerInternalRoutes } from './internal';
 
 export function registerRoutes(app: Express): void {
   // Register route modules
@@ -17,4 +20,7 @@ export function registerRoutes(app: Express): void {
   registerSearchRoutes(app);
   registerGitRoutes(app);
   registerAnalysisRoutes(app);
+  registerRelationRoutes(app);
+  registerConfigRoutes(app);
+  registerInternalRoutes(app);
 }
