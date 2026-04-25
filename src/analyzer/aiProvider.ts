@@ -1,9 +1,10 @@
 /**
  * AI Provider Adapter
- * Uses Claude CLI subprocess to perform AI analysis
- * Reuses the user's Claude Code model configuration (zero-config)
+ * Primary: Uses Anthropic SDK directly for API calls (works with custom base URLs)
+ * Fallback: Uses Claude CLI subprocess
  */
 
+import Anthropic from '@anthropic-ai/sdk';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -12,28 +13,95 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ai-provider');
 
+interface AIConfig {
+  apiKey?: string;
+  authToken?: string;
+  baseUrl?: string;
+  model?: string;
+  maxRetries?: number;
+  retryDelayMs?: number;
+}
+
+function loadEnvConfig(): AIConfig {
+  const config: AIConfig = {};
+
+  // Load from worker-env.json (written by daemon.js on start)
+  const envFile = path.join(__dirname, '../../dev-scripts/worker-env.json');
+  if (fs.existsSync(envFile)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(envFile, 'utf-8'));
+      if (data.ANTHROPIC_API_KEY) config.apiKey = data.ANTHROPIC_API_KEY;
+      if (data.ANTHROPIC_AUTH_TOKEN) config.authToken = data.ANTHROPIC_AUTH_TOKEN;
+      if (data.ANTHROPIC_BASE_URL) config.baseUrl = data.ANTHROPIC_BASE_URL;
+      if (data.ANTHROPIC_MODEL) config.model = data.ANTHROPIC_MODEL;
+    } catch (error) {
+      logger.warn(`[AIProvider] Failed to read worker-env.json: ${error}`);
+    }
+  }
+
+  // Load API key from ~/.claude-dev-sprite/.env (overrides env file)
+  const envPath = path.join(os.homedir(), '.claude-dev-sprite', '.env');
+  if (fs.existsSync(envPath)) {
+    try {
+      const content = fs.readFileSync(envPath, 'utf-8');
+      for (const line of content.split('\n')) {
+        const match = line.match(/^ANTHROPIC_API_KEY=(.+)$/);
+        if (match) {
+          config.apiKey = match[1].trim();
+          break;
+        }
+      }
+    } catch (error) {
+      logger.warn(`[AIProvider] Failed to read .env file: ${error}`);
+    }
+  }
+
+  // Environment variables override file config
+  if (process.env.ANTHROPIC_API_KEY) config.apiKey = process.env.ANTHROPIC_API_KEY;
+  if (process.env.ANTHROPIC_AUTH_TOKEN) config.authToken = process.env.ANTHROPIC_AUTH_TOKEN;
+  if (process.env.ANTHROPIC_BASE_URL) config.baseUrl = process.env.ANTHROPIC_BASE_URL;
+  if (process.env.ANTHROPIC_MODEL) config.model = process.env.ANTHROPIC_MODEL;
+
+  return config;
+}
+
 export class AIProvider {
   private model: string;
   private maxRetries: number;
   private retryDelayMs: number;
+  private envConfig: AIConfig;
+  private useSDK: boolean;
 
   constructor(config?: { model?: string; maxRetries?: number; retryDelayMs?: number }) {
-    this.model = config?.model || 'claude-sonnet-4-6';
+    this.envConfig = loadEnvConfig();
+
+    // Model priority: explicit config > env config > default
+    this.model = config?.model || this.envConfig.model || 'claude-sonnet-4-6';
     this.maxRetries = config?.maxRetries ?? 2;
     this.retryDelayMs = config?.retryDelayMs ?? 2000;
+
+    // Use SDK if we have an API key or auth token
+    this.useSDK = !!(this.envConfig.apiKey || this.envConfig.authToken);
+
+    const hasKey = !!this.envConfig.apiKey;
+    const hasToken = !!this.envConfig.authToken;
+    const hasBase = !!this.envConfig.baseUrl;
+    logger.info(`[AIProvider] Mode: ${this.useSDK ? 'SDK' : 'CLI'}, model: ${this.model}, apiKey=${hasKey}, authToken=${hasToken}, baseUrl=${hasBase}`);
   }
 
   /**
-   * Call AI model with prompt via Claude CLI
+   * Call AI model - uses SDK directly if API key is available, falls back to CLI
    */
   async callAI(prompt: string): Promise<{ content: string; model: string; tokensUsed: number }> {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
-        logger.info(`[AIProvider] Calling Claude CLI (attempt ${attempt}/${this.maxRetries})`);
+        logger.info(`[AIProvider] Calling AI (attempt ${attempt}/${this.maxRetries}, mode: ${this.useSDK ? 'SDK' : 'CLI'})`);
 
-        const result = await this.executeClaudeCLI(prompt);
+        const result = this.useSDK
+          ? await this.executeSDK(prompt)
+          : await this.executeClaudeCLI(prompt);
 
         logger.info(`[AIProvider] AI response received, length: ${result.length}`);
         return {
@@ -57,81 +125,44 @@ export class AIProvider {
   }
 
   /**
-   * Build clean environment for Claude CLI subprocess
-   * Filters out session detection variables and loads API key from .env file
+   * Execute via Anthropic SDK directly - works with custom base URLs (GLM, etc.)
    */
-  private buildCleanEnv(): Record<string, string> {
-    let env: Record<string, string> = {};
-    const excluded = ['CLAUDECODE', 'CLAUDE_CODE_SESSION'];
+  private async executeSDK(prompt: string): Promise<string> {
+    const apiKey = this.envConfig.apiKey || this.envConfig.authToken || '';
+    const baseUrl = this.envConfig.baseUrl;
 
-    // Copy all environment variables except excluded ones
-    for (const [key, val] of Object.entries(process.env)) {
-      if (val !== undefined && !excluded.includes(key)) {
-        env[key] = val;
-      }
+    const clientOptions: { apiKey: string; baseURL?: string } = { apiKey };
+    if (baseUrl) {
+      clientOptions.baseURL = baseUrl;
     }
 
-    // Set SDK entry point to prevent nested session detection
-    env.CLAUDE_CODE_ENTRYPOINT = 'sdk-ts';
+    const client = new Anthropic(clientOptions);
 
-    // Also load auth vars from daemon's env file (written by daemon.js on start)
-    const envFile = path.join(__dirname, '../../dev-scripts/worker-env.json');
-    if (fs.existsSync(envFile)) {
-      try {
-        const extraEnv = JSON.parse(fs.readFileSync(envFile, 'utf-8'));
-        for (const [key, val] of Object.entries(extraEnv)) {
-          if (typeof val === 'string') {
-            env[key] = val;
-          }
-        }
-      } catch (error) {
-        logger.warn(`[AIProvider] Failed to read worker-env.json: ${error}`);
-      }
+    const response = await client.messages.create({
+      model: this.model,
+      max_tokens: 16384,
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+    });
+
+    // Extract text content from response
+    const textBlocks = response.content.filter((block): block is Anthropic.TextBlock => block.type === 'text');
+    if (textBlocks.length === 0) {
+      throw new Error('AI returned no text content');
     }
 
-    // Load API key from ~/.claude-dev-sprite/.env
-    const envPath = path.join(os.homedir(), '.claude-dev-sprite', '.env');
-    if (fs.existsSync(envPath)) {
-      try {
-        const content = fs.readFileSync(envPath, 'utf-8');
-        for (const line of content.split('\n')) {
-          const match = line.match(/^ANTHROPIC_API_KEY=(.+)$/);
-          if (match) {
-            env.ANTHROPIC_API_KEY = match[1].trim();
-            break;
-          }
-        }
-      } catch (error) {
-        logger.warn(`[AIProvider] Failed to read .env file: ${error}`);
-      }
-    }
-
-    // Log available auth methods
-    const hasApiKey = !!env.ANTHROPIC_API_KEY;
-    const hasAuthToken = !!env.ANTHROPIC_AUTH_TOKEN;
-    const hasOAuth = !!env.CLAUDE_CODE_OAUTH_TOKEN;
-    logger.info(`[AIProvider] Auth: apiKey=${hasApiKey}, authToken=${hasAuthToken}, oauth=${hasOAuth}`);
-
-    return env;
+    return textBlocks.map(block => block.text).join('\n');
   }
 
   /**
-   * Execute Claude CLI as subprocess using stdin for prompt (avoids command line length limits)
+   * Fallback: Execute Claude CLI as subprocess
    */
   private executeClaudeCLI(prompt: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      // Write prompt to a temp file to avoid command line length limits on Windows
-      const tmpDir = os.tmpdir();
-      const promptFile = path.join(tmpDir, `devsprite-prompt-${Date.now()}.txt`);
-
-      try {
-        fs.writeFileSync(promptFile, prompt, 'utf-8');
-      } catch (writeError: any) {
-        reject(new Error(`Failed to write prompt file: ${writeError.message}`));
-        return;
-      }
-
-      // Build clean environment and prepare args
       const env = this.buildCleanEnv();
       const args = [
         '-p',
@@ -139,77 +170,74 @@ export class AIProvider {
         '--output-format', 'text',
       ];
 
-      // Add API key flag only if explicitly configured in .env
-      // (ANTHROPIC_AUTH_TOKEN and CLAUDE_CODE_OAUTH_TOKEN work via env vars)
       if (env.ANTHROPIC_API_KEY) {
         args.push('--api-key', env.ANTHROPIC_API_KEY);
       }
 
-      // Resolve claude CLI path (may not be in PATH for daemon processes)
       const claudePath = this.resolveClaudeCLI();
-
       logger.info(`[AIProvider] Spawning: ${claudePath} ${args.filter(a => !a.includes('key')).join(' ')} < prompt`);
 
       const child = spawn(claudePath, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
         env,
-        shell: process.platform === 'win32',  // Required for .cmd files on Windows
+        shell: process.platform === 'win32',
       });
 
       let stdout = '';
       let stderr = '';
 
-      child.stdout.on('data', (data: Buffer) => {
-        stdout += data.toString();
-      });
-
-      child.stderr.on('data', (data: Buffer) => {
-        stderr += data.toString();
-      });
+      child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
+      child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
 
       child.on('error', (error) => {
-        // Clean up temp file
-        try { fs.unlinkSync(promptFile); } catch {}
-        reject(new Error(`Failed to spawn Claude CLI: ${error.message}. Make sure 'claude' is installed and in PATH.`));
+        reject(new Error(`Failed to spawn Claude CLI: ${error.message}`));
       });
 
       child.on('close', (code) => {
-        // Clean up temp file
-        try { fs.unlinkSync(promptFile); } catch {}
-
         if (code !== 0) {
           reject(new Error(`Claude CLI exited with code ${code}\nstderr: ${stderr.substring(0, 500)}`));
           return;
         }
-
-        if (stderr && stderr.includes('error')) {
-          logger.warn(`[AIProvider] Claude CLI stderr: ${stderr.substring(0, 200)}`);
-        }
-
         resolve(stdout.trim());
       });
 
-      // Send prompt via stdin and close
       child.stdin.write(prompt);
       child.stdin.end();
     });
+  }
+
+  /**
+   * Build clean environment for Claude CLI subprocess
+   */
+  private buildCleanEnv(): Record<string, string> {
+    let env: Record<string, string> = {};
+    const excluded = ['CLAUDECODE', 'CLAUDE_CODE_SESSION'];
+
+    for (const [key, val] of Object.entries(process.env)) {
+      if (val !== undefined && !excluded.includes(key)) {
+        env[key] = val;
+      }
+    }
+
+    env.CLAUDE_CODE_ENTRYPOINT = 'sdk-ts';
+
+    // Load from env config
+    if (this.envConfig.apiKey) env.ANTHROPIC_API_KEY = this.envConfig.apiKey;
+    if (this.envConfig.authToken) env.ANTHROPIC_AUTH_TOKEN = this.envConfig.authToken;
+    if (this.envConfig.baseUrl) env.ANTHROPIC_BASE_URL = this.envConfig.baseUrl;
+
+    return env;
   }
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  /**
-   * Resolve the full path to the Claude CLI executable
-   */
   private resolveClaudeCLI(): string {
-    // Common locations for Claude CLI
     const candidates = [
-      // npm global on Windows
       path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude.cmd'),
       path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude'),
-      // Unix
       '/usr/local/bin/claude',
       '/usr/bin/claude',
       path.join(os.homedir(), '.local', 'bin', 'claude'),
@@ -220,8 +248,6 @@ export class AIProvider {
         return candidate;
       }
     }
-
-    // Fallback to 'claude' and hope PATH is set
     return 'claude';
   }
 

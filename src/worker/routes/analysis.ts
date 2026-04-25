@@ -507,10 +507,13 @@ function parseDocuments(aiContent: string): { path: string; title: string; categ
     // Try to extract JSON from the response
     let jsonContent = aiContent.trim();
 
-    // Remove markdown code blocks if present
-    const codeBlockMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (codeBlockMatch) {
-      jsonContent = codeBlockMatch[1].trim();
+    // Remove markdown code blocks ONLY if the entire response is wrapped in one
+    // (Don't extract inner code blocks that are part of the JSON content)
+    const trimmedStart = jsonContent.startsWith('```');
+    const trimmedEnd = jsonContent.endsWith('```');
+    if (trimmedStart && trimmedEnd) {
+      // Remove opening ``` (with optional language tag) and closing ```
+      jsonContent = jsonContent.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
 
     // Try to find JSON object in the response
@@ -521,13 +524,24 @@ function parseDocuments(aiContent: string): { path: string; title: string; categ
     }
 
     // Fix common JSON issues: escape raw newlines inside string values
-    // The AI may return JSON with actual newlines inside string values
-    jsonContent = jsonContent.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
-      // Replace literal newlines inside string values with \n
-      return match.replace(/\r?\n/g, '\\n');
-    });
+    // AI models (especially GLM) may return JSON with actual newlines inside string values
+    // The regex approach fails on very long strings, so we use a character-by-character fixer
+    jsonContent = fixRawNewlinesInJson(jsonContent);
 
-    const parsed = JSON.parse(jsonContent);
+    // Handle truncated JSON: if response was cut off due to max_tokens, try to close it
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonContent);
+    } catch (parseError) {
+      // Try to repair truncated JSON by closing open strings and brackets
+      const repaired = repairTruncatedJson(jsonContent);
+      if (repaired) {
+        logger.info('[AnalysisRoutes] Successfully repaired truncated JSON');
+        parsed = repaired;
+      } else {
+        throw parseError;
+      }
+    }
     const documents = parsed.documents || [];
 
     return documents.map((doc: any) => {
@@ -592,6 +606,118 @@ function extractDocumentsFallback(aiContent: string): { path: string; title: str
   }
 
   return documents;
+}
+
+/**
+ * Fix raw newlines inside JSON string values.
+ * GLM and other AI models may output JSON with actual newline characters inside
+ * string values instead of escaped \n. This function iterates character by character
+ * to find and escape them, handling all edge cases correctly.
+ */
+function fixRawNewlinesInJson(json: string): string {
+  let result = '';
+  let inString = false;
+  let i = 0;
+
+  while (i < json.length) {
+    const ch = json[i];
+
+    if (inString) {
+      if (ch === '\\' && i + 1 < json.length) {
+        // Already escaped - copy both characters
+        result += ch + json[i + 1];
+        i += 2;
+      } else if (ch === '"') {
+        // End of string
+        result += ch;
+        inString = false;
+        i++;
+      } else if (ch === '\n') {
+        // Raw newline inside string - escape it
+        result += '\\n';
+        i++;
+      } else if (ch === '\r') {
+        // Raw carriage return inside string - skip (or escape if standalone)
+        if (i + 1 < json.length && json[i + 1] === '\n') {
+          result += '\\n';
+          i += 2;
+        } else {
+          result += '\\n';
+          i++;
+        }
+      } else if (ch === '\t') {
+        // Raw tab inside string - escape it
+        result += '\\t';
+        i++;
+      } else {
+        result += ch;
+        i++;
+      }
+    } else {
+      if (ch === '"') {
+        // Start of string
+        result += ch;
+        inString = true;
+        i++;
+      } else {
+        result += ch;
+        i++;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Try to repair truncated JSON by finding the last complete document boundary.
+ * Tracks string context properly to avoid false matches inside string values.
+ * Returns parsed object if repair succeeds, null otherwise.
+ */
+function repairTruncatedJson(json: string): any | null {
+  // Find document boundaries by tracking },{"path": patterns outside of strings
+  let inString = false;
+  const boundaries: number[] = [0];
+
+  for (let i = 0; i < json.length; i++) {
+    const ch = json[i];
+    if (inString) {
+      if (ch === '\\' && i + 1 < json.length) { i++; continue; }
+      if (ch === '"') inString = false;
+    } else {
+      if (ch === '"') {
+        inString = true;
+      } else if (ch === '}') {
+        // Check if followed by comma and another object (document separator)
+        const rest = json.substring(i + 1).replace(/^\s+/, '');
+        if (rest.startsWith(',')) {
+          boundaries.push(i + 1);
+        }
+      }
+    }
+  }
+
+  // Try from the last boundary backward
+  for (let b = boundaries.length - 1; b >= 0; b--) {
+    const cutPos = boundaries[b];
+    let partial: string;
+
+    if (b === 0) {
+      partial = json + ']}';
+    } else {
+      partial = json.substring(0, cutPos).replace(/,\s*$/, '') + ']}';
+    }
+
+    try {
+      const parsed = JSON.parse(partial);
+      if (parsed.documents && parsed.documents.length > 0) {
+        return parsed;
+      }
+    } catch {
+      // Try next boundary
+    }
+  }
+  return null;
 }
 
 export function getAnalyzer(): Analyzer | null {
