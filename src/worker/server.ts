@@ -15,6 +15,8 @@ import { Analyzer } from '../analyzer';
 import * as fs from 'fs';
 import { getProjectDiscoveryService } from '../services/projectDiscovery';
 import { registerProjectDetector } from './detectorRegistry';
+import { sseBroadcaster } from './sseBroadcaster';
+import { analysisTracker } from './analysisTracker';
 
 let analyzer: Analyzer | null = null;
 
@@ -35,6 +37,29 @@ export async function startServer(): Promise<void> {
   // Health check endpoint
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok' });
+  });
+
+  // SSE stream endpoint for real-time analysis progress
+  app.get('/api/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    sseBroadcaster.addClient(res);
+
+    // Send initial state
+    const currentState = analysisTracker.getState();
+    res.write(`data: ${JSON.stringify({ type: 'analysis_progress', ...currentState, timestamp: Date.now() })}\n\n`);
+
+    // Keep-alive every 30 seconds to prevent proxy timeouts
+    const keepAlive = setInterval(() => {
+      res.write(': keepalive\n\n');
+    }, 30000);
+
+    req.on('close', () => {
+      clearInterval(keepAlive);
+    });
   });
 
   // API routes
@@ -103,8 +128,10 @@ async function setupProjectDetector(repoPath: string, projectName: string): Prom
       logger.info(`[CommitDetector] Commit detected in ${projectName}: ${event.commitHash.substring(0, 7)} - ${event.commitMessage}`);
 
       if (analyzer) {
+        analysisTracker.startAnalysis(projectName, event.commitHash, 'incremental');
         try {
           logger.info(`[CommitDetector] Triggering AI analysis for ${projectName}`);
+          analysisTracker.updateStep('analyzing', 20);
           const result = await analyzer.analyze(event.repoPath, event.commitHash);
 
           // Write documents to project's knowledge directory
@@ -113,6 +140,7 @@ async function setupProjectDetector(repoPath: string, projectName: string): Prom
             fs.mkdirSync(knowledgePath, { recursive: true });
           }
 
+          analysisTracker.updateStep('writing_documents', 80);
           for (const doc of result.documents) {
             const docPath = join(knowledgePath, doc.path);
             const docDir = dirname(docPath);
@@ -125,8 +153,10 @@ async function setupProjectDetector(repoPath: string, projectName: string): Prom
             logger.info(`[CommitDetector] Wrote document: ${doc.path}`);
           }
 
+          analysisTracker.completeAnalysis();
           logger.info(`[CommitDetector] Analysis completed: ${result.documents.length} document(s) generated`);
         } catch (error) {
+          analysisTracker.failAnalysis(error instanceof Error ? error.message : 'Unknown error');
           logger.error(`[CommitDetector] AI analysis failed for ${projectName}:`, error);
         }
       }

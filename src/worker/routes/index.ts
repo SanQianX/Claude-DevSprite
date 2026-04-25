@@ -12,6 +12,7 @@ import { registerAnalysisRoutes } from './analysis';
 import { registerRelationRoutes } from './relations';
 import { registerConfigRoutes } from './config';
 import { registerInternalRoutes } from './internal';
+import { registerLogRoutes } from './logs';
 
 export function registerRoutes(app: Express): void {
   // Register route modules
@@ -23,4 +24,5 @@ export function registerRoutes(app: Express): void {
   registerRelationRoutes(app);
   registerConfigRoutes(app);
   registerInternalRoutes(app);
+  registerLogRoutes(app);
 }

@@ -35,6 +35,17 @@
     </div>
 
     <div class="header-right">
+      <div v-if="isRunning" class="analysis-indicator" :title="stepLabel">
+        <span class="pulse-dot"></span>
+        <span class="indicator-text">{{ currentProject || 'Analyzing...' }}</span>
+      </div>
+
+      <router-link to="/logs" class="icon-button" aria-label="View logs" title="Worker Logs">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-5 3 3.51L14 10l4 5zM6.5 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
+        </svg>
+      </router-link>
+
       <button class="icon-button" aria-label="Notifications">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
           <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
@@ -45,18 +56,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useUIStore } from '@/stores/ui'
 import { useSearchStore } from '@/stores/search'
+import { useAnalysisStore } from '@/stores/analysis'
 import SearchBar from '@/components/common/SearchBar.vue'
 
 const router = useRouter()
 const route = useRoute()
 const uiStore = useUIStore()
 const searchStore = useSearchStore()
+const analysisStore = useAnalysisStore()
 const { sidebarOpen } = storeToRefs(uiStore)
+const { isRunning, currentProject, stepLabel } = storeToRefs(analysisStore)
 
 const searchQuery = ref('')
 
@@ -76,6 +90,14 @@ async function handleSearch(q: string) {
   }
   router.push({ name: 'search', query: searchParams })
 }
+
+onMounted(() => {
+  analysisStore.connectSSE()
+})
+
+onUnmounted(() => {
+  analysisStore.disconnectSSE()
+})
 </script>
 
 <style scoped>
@@ -155,6 +177,38 @@ async function handleSearch(q: string) {
 .icon-button:hover {
   background-color: var(--color-bg-secondary);
   color: var(--color-text);
+}
+
+.analysis-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  background-color: rgba(59, 130, 246, 0.1);
+  font-size: 12px;
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.indicator-text {
+  font-weight: 500;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 640px) {

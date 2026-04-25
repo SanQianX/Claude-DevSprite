@@ -16,6 +16,7 @@ import { asyncHandler, createError } from '../middleware/errorHandler';
 import { createLogger } from '../../utils/logger';
 import { getProjectDiscoveryService } from '../../services/projectDiscovery';
 import { config } from '../../config';
+import { analysisTracker } from '../analysisTracker';
 
 const logger = createLogger('analysis');
 
@@ -40,24 +41,32 @@ export function registerAnalysisRoutes(app: Express): void {
       const projectPath = project.path;
       logger.info(`[AnalysisRoutes] Starting full project analysis for ${name}`);
 
+      analysisTracker.startAnalysis(name, null, 'full');
+
       // 1. Collect project structure
+      analysisTracker.updateStep('collecting_structure', 10);
       const projectStructure = collectProjectStructure(projectPath);
 
       // 2. Collect key source files
+      analysisTracker.updateStep('collecting_source_files', 20);
       const sourceFiles = collectKeySourceFiles(projectPath);
 
       // 3. Collect existing knowledge (if any)
+      analysisTracker.updateStep('collecting_knowledge', 30);
       const existingKnowledge = collectExistingKnowledge(project.knowledgePath);
 
       // 4. Build the full analysis prompt
+      analysisTracker.updateStep('building_prompt', 40);
       const prompt = buildFullAnalysisPrompt(name, projectPath, projectStructure, sourceFiles, existingKnowledge);
 
       // 5. Call AI
+      analysisTracker.updateStep('calling_ai', 55);
       logger.info(`[AnalysisRoutes] Calling AI for full analysis (prompt length: ${prompt.length})`);
       const aiProvider = new AIProvider();
       const aiResponse = await aiProvider.callAI(prompt);
 
       // 6. Parse and write documents
+      analysisTracker.updateStep('writing_documents', 80);
       const documents = parseDocuments(aiResponse.content);
 
       const knowledgePath = project.knowledgePath;
@@ -87,6 +96,7 @@ export function registerAnalysisRoutes(app: Express): void {
       }
 
       // 7. Update project in database
+      analysisTracker.updateStep('updating_database', 95);
       const db = await getDatabase();
       const simpleGit = (await import('simple-git')).default;
       const git = simpleGit(projectPath);
@@ -98,6 +108,8 @@ export function registerAnalysisRoutes(app: Express): void {
       });
       db.incrementAnalysisCount(project.id);
 
+      analysisTracker.completeAnalysis();
+
       res.json({
         projectName: name,
         status: 'completed',
@@ -108,6 +120,7 @@ export function registerAnalysisRoutes(app: Express): void {
         durationMs: 0,
       });
     } catch (error: unknown) {
+      analysisTracker.failAnalysis(error instanceof Error ? error.message : 'Unknown error');
       if (error instanceof Error && 'statusCode' in error) {
         throw error;
       }
@@ -246,10 +259,14 @@ export function registerAnalysisRoutes(app: Express): void {
       const db = await getDatabase();
       const logs = db.getAnalysisLogs(project.id, 1);
       const lastAnalysis = logs.length > 0 ? logs[0] : null;
+      const trackerState = analysisTracker.getState();
 
       res.json({
         projectName: name,
-        status: 'idle',
+        status: trackerState.status,
+        currentStep: trackerState.currentStep,
+        progress: trackerState.progress,
+        isThisProject: trackerState.projectName === name,
         lastAnalysis: lastAnalysis ? {
           commitHash: lastAnalysis.commit_hash,
           commitMessage: lastAnalysis.commit_message,
@@ -259,7 +276,7 @@ export function registerAnalysisRoutes(app: Express): void {
           tokensUsed: lastAnalysis.tokens_used,
           durationMs: lastAnalysis.duration_ms,
         } : null,
-        queuedAnalyses: 0,
+        queuedAnalyses: trackerState.queueDepth,
       });
     } catch (error: unknown) {
       if (error instanceof Error && 'statusCode' in error) {
