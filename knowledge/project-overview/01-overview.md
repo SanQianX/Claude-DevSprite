@@ -23,7 +23,7 @@ Claude-DevSprite 围绕四个核心环节构成完整闭环：
 
 ### 对开发者
 
-- **零配置使用**：项目发现服务自动扫描 `~/Projects`、`~/code`、`~/dev`、`~/workspace` 等常见目录，无需手动注册
+- **零配置使用**：项目发现服务自动扫描 `~/Projects`、`~/code`、`~/dev`、`~/workspace` 等常见目录，无需手动注册项目
 - **智能文档生成**：AI 自动分析代码变更，生成包含架构说明、模块分析、变更日志等有价值的知识文档
 - **知识积累**：随着项目迭代，知识库自动更新和丰富，形成活文档（Living Documentation）
 - **源码关联**：文档中通过 `[source](/project/Claude-DevSprite/source?path=src/...)` 链接可直接跳转到对应源码查看
@@ -74,4 +74,22 @@ Web Dashboard 实时展示更新
 
 ## 关键配置入口
 
-核心配置位于 [config.ts](/project/Claude-DevSprite/source?path=src/config.ts)，涵盖服务器端口、知识库目录名、分析模式、检测策略、日志级别和项目发现路径等。默认服务端口 `38888`，知识库目录名 `knowledge`，AI 模型默认 `claude-sonnet-4-6`。
+核心配置位于 [config.ts](/project/Claude-DevSprite/source?path=src/config.ts)，涵盖：
+
+- **服务器**：默认端口 `38888`，主机 `localhost`
+- **知识库**：目录名 `knowledge/`，可配置自动提交和提交消息模板
+- **分析模式**：默认增量分析，支持全量分析（30天间隔或触发条件）
+- **检测策略**：优先 Hook，自动降级到 Watcher 和 Poller
+- **项目发现**：自动扫描常见开发目录，最大深度 3 层
+- **日志**：默认 `info` 级别，日志文件存储在 `~/.claude/claude-dev-sprite/logs/`
+
+## 生命周期钩子
+
+项目通过四个生命周期钩子与 Claude Code 环境集成：
+
+| 钩子 | 文件 | 触发时机 | 核心动作 |
+|------|------|----------|----------|
+| SessionStart | [sessionStart.ts](/project/Claude-DevSprite/source?path=src/hooks/sessionStart.ts) | 会话启动 | 初始化数据库、启动 Worker、触发项目发现 |
+| UserPromptSubmit | [userPromptSubmit.ts](/project/Claude-DevSprite/source?path=src/hooks/userPromptSubmit.ts) | 用户输入 | 拦截 `/kb` 命令，提供状态查询和手动分析触发 |
+| PostToolUse | [postToolUse.ts](/project/Claude-DevSprite/source?path=src/hooks/postToolUse.ts) | 工具调用后 | 跟踪文件修改操作，记录编辑上下文 |
+| SessionEnd | [sessionEnd.ts](/project/Claude-DevSprite/source?path=src/hooks/sessionEnd.ts) | 会话结束 | 停止检测器、关闭数据库连接、清理资源 |
