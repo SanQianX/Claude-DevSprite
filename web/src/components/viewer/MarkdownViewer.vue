@@ -4,7 +4,7 @@
 
 <script setup lang="ts">
 import { computed, ref, nextTick, watch } from 'vue'
-import { marked } from 'marked'
+import { Marked, Renderer } from 'marked'
 import hljs from 'highlight.js/lib/core'
 import javascript from 'highlight.js/lib/languages/javascript'
 import typescript from 'highlight.js/lib/languages/typescript'
@@ -44,21 +44,20 @@ const emit = defineEmits<{
 const viewerRef = ref<HTMLElement | null>(null)
 
 // Custom renderer to add IDs to headings
-const renderer = new marked.Renderer()
+const renderer = new Renderer()
 
-renderer.heading = function (data) {
-  const text = data.text
-  const depth = data.depth
+renderer.heading = function (text: string, depth: string | number) {
+  const level = typeof depth === 'string' ? parseInt(depth, 10) : depth
   const slug = text
     .toLowerCase()
     .replace(/[^\w\u4e00-\u9fff]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  const id = `heading-${slug}-${depth}`
-  return `<h${depth} id="${id}">${text}</h${depth}>\n`
+  const id = `heading-${slug}-${level}`
+  return `<h${level} id="${id}">${text}</h${level}>\n`
 }
 
 // Create a marked instance for this component (better performance and isolation)
-const markedInstance = new marked.Marked({
+const markedInstance = new Marked({
   renderer,
   gfm: true,
   breaks: true,
@@ -76,7 +75,7 @@ const renderedContent = computed(() => {
   const html = markedInstance.parse(props.content) as string
   // Sanitize HTML to prevent XSS attacks from malicious markdown content
   return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a', 'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'strong', 'em', 'del', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img'],
+    ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a', 'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'span', 'strong', 'em', 'del', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'br', 'sup', 'sub', 'dd', 'dt', 'dl'],
     ALLOWED_ATTR: ['id', 'href', 'title', 'src', 'alt', 'class', 'target', 'rel'],
     FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur']

@@ -117,11 +117,12 @@ export function registerFileRoutes(app: Express): void {
       const content = fs.readFileSync(fullPath, 'utf-8');
       const { data: meta, content: markdown } = matter(content);
 
-      // Extract title from first line or filename
-      const firstLine = markdown.split('\n')[0];
-      const title = firstLine.startsWith('#')
-        ? firstLine.replace(/^#+\s+/, '').trim()
-        : path.basename(filePath, '.md');
+      // Extract title from frontmatter title, first heading, or filename
+      let title = (meta as Record<string, unknown>).title as string | undefined;
+      if (!title) {
+        const headingMatch = markdown.match(/^#+\s+(.+)$/m);
+        title = headingMatch ? headingMatch[1].trim() : path.basename(filePath, '.md');
+      }
 
       res.json({
         path: filePath,
