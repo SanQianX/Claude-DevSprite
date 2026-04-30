@@ -2,6 +2,8 @@
 
 > Git Commit 自动监听 + AI 分析驱动的结构化知识库生成器，带 Web Dashboard 可视化浏览。
 
+<!-- test commit for analysis pipeline -->
+
 ## 什么是 Claude-DevSprite？
 
 Claude-DevSprite 是一个 **Claude Code Skill 插件**，它围绕四个核心环节构成完整闭环：
