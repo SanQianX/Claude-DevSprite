@@ -246,3 +246,5 @@ Claude-DevSprite 通过四个生命周期钩子与 Claude Code 集成：
 ## License
 
 MIT
+
+<!-- E2E test: push and analysis pipeline verification -->
