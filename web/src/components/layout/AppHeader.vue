@@ -1,17 +1,6 @@
 <template>
   <header class="app-header">
     <div class="header-left">
-      <button
-        class="menu-toggle"
-        @click="toggleSidebar"
-        :aria-label="sidebarOpen ? 'Close sidebar' : 'Open sidebar'"
-      >
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-          <path v-if="!sidebarOpen" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10zm0 5.25a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75z" />
-          <path v-else d="M4.53 4.22a.75.75 0 010 1.06L1.06 8.75l3.47 3.47a.75.75 0 01-1.06 1.06l-4-4a.75.75 0 010-1.06l4-4a.75.75 0 011.06 0z" />
-        </svg>
-      </button>
-
       <router-link to="/" class="logo">
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
           <rect width="28" height="28" rx="6" fill="#3b82f6"/>
@@ -34,23 +23,17 @@
       </div>
     </div>
 
+    <router-link to="/settings" class="icon-button settings-btn" aria-label="Settings" title="System Settings">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+      </svg>
+    </router-link>
+
     <div class="header-right">
       <div v-if="isRunning" class="analysis-indicator" :title="stepLabel">
         <span class="pulse-dot"></span>
         <span class="indicator-text">{{ currentProject || 'Analyzing...' }}</span>
       </div>
-
-      <router-link to="/logs" class="icon-button" aria-label="View logs" title="Worker Logs">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-5 3 3.51L14 10l4 5zM6.5 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
-        </svg>
-      </router-link>
-
-      <button class="icon-button" aria-label="Notifications">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
-        </svg>
-      </button>
     </div>
   </header>
 </template>
@@ -59,24 +42,17 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { useUIStore } from '@/stores/ui'
 import { useSearchStore } from '@/stores/search'
 import { useAnalysisStore } from '@/stores/analysis'
 import SearchBar from '@/components/common/SearchBar.vue'
 
 const router = useRouter()
 const route = useRoute()
-const uiStore = useUIStore()
 const searchStore = useSearchStore()
 const analysisStore = useAnalysisStore()
-const { sidebarOpen } = storeToRefs(uiStore)
 const { isRunning, currentProject, stepLabel } = storeToRefs(analysisStore)
 
 const searchQuery = ref('')
-
-function toggleSidebar() {
-  uiStore.toggleSidebar()
-}
 
 async function handleSearch(q: string) {
   if (!q.trim()) {
@@ -118,22 +94,6 @@ onUnmounted(() => {
   gap: 12px;
 }
 
-.menu-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
-  transition: all var(--transition-fast);
-}
-
-.menu-toggle:hover {
-  background-color: var(--color-bg-secondary);
-  color: var(--color-text);
-}
-
 .logo {
   display: flex;
   align-items: center;
@@ -149,8 +109,8 @@ onUnmounted(() => {
 
 .header-center {
   flex: 1;
-  max-width: 480px;
-  margin: 0 20px;
+  max-width: 680px;
+  margin: 0 16px;
 }
 
 .search-container {

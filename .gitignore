@@ -32,3 +32,10 @@ test-data/
 # 环境变量
 .env
 .env.local
+dev-scripts/worker-env.json
+
+# 项目运行时数据
+.Claude-DevSprite/
+
+# 参考资料与下载
+References/

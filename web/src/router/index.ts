@@ -7,14 +7,19 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/HomePage.vue')
   },
   {
+    path: '/chat',
+    name: 'chat',
+    component: () => import('@/views/DevChatView.vue')
+  },
+  {
     path: '/search',
     name: 'search',
     component: () => import('@/views/SearchResults.vue')
   },
   {
-    path: '/logs',
-    name: 'logs',
-    component: () => import('@/views/LogsView.vue')
+    path: '/settings',
+    name: 'settings',
+    component: () => import('@/views/SettingsView.vue')
   },
   {
     path: '/project/:projectName',

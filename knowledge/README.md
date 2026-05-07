@@ -18,3 +18,4 @@ Claude-DevSprite 是一个 Claude Code Skill，自动监听 Git Commit，通过 
 - [系统架构](project-overview/02-architecture.md) - 主要组件、数据流、组件连接方式
 - [模块分析](project-overview/03-modules.md) - 关键模块、职责和 API
 - [技术栈](project-overview/04-tech-stack.md) - 框架、库、工具及选择原因
+

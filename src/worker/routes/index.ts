@@ -13,6 +13,7 @@ import { registerRelationRoutes } from './relations';
 import { registerConfigRoutes } from './config';
 import { registerInternalRoutes } from './internal';
 import { registerLogRoutes } from './logs';
+import { registerTeamRoutes } from './teams';
 
 export function registerRoutes(app: Express): void {
   // Register route modules
@@ -25,4 +26,5 @@ export function registerRoutes(app: Express): void {
   registerConfigRoutes(app);
   registerInternalRoutes(app);
   registerLogRoutes(app);
+  registerTeamRoutes(app);
 }

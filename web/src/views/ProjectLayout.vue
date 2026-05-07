@@ -9,6 +9,17 @@
         <router-view />
       </main>
 
+      <router-link
+        :to="`/chat`"
+        class="dev-chat-fab"
+        title="开发聊天"
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+          <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
+        </svg>
+      </router-link>
+
       <AppTocPanel v-if="tocPanelOpen" class="toc-panel" />
     </div>
   </div>
@@ -117,5 +128,27 @@ watch(
   .main-content {
     padding: 16px;
   }
+}
+
+.dev-chat-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  z-index: 100;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.dev-chat-fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
 }
 </style>
