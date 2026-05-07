@@ -305,8 +305,12 @@ async function loadConfig() {
     systemConfig.diffMaxTokens = cfg.analysis?.diffMaxTokens || 8000
     systemConfig.autoDiscover = cfg.projectDiscovery?.autoDiscover ?? true
     systemConfig.detectionStrategy = cfg.detection?.preferredStrategy || 'hook'
-    // AI config from analysis section
-    aiConfig.maxRetries = cfg.analysis?.maxRetries || 3
+    // AI config from ai section
+    aiConfig.model = cfg.ai?.model || ''
+    aiConfig.baseUrl = cfg.ai?.baseUrl || ''
+    // Show masked key so user knows a key is saved; empty string means nothing saved
+    aiConfig.apiKey = cfg.ai?.maskedApiKey || ''
+    aiConfig.maxRetries = cfg.ai?.maxRetries || cfg.analysis?.maxRetries || 3
   } catch (e: any) {
     console.error('Failed to load config:', e)
   }
@@ -368,15 +372,18 @@ function removeSkill(team: TeamConfig, skill: string) {
 async function saveAiConfig() {
   saving.value = true
   try {
-    await configApi.patch({
-      analysis: {
-        mode: systemConfig.analysisMode as any,
-        diffMaxTokens: aiConfig.maxRetries,
-        maxRetries: aiConfig.maxRetries,
-        fullAnalysisIntervalDays: rawConfig.analysis?.fullAnalysisIntervalDays || 30,
-        fullAnalysisTriggers: undefined as any,
-      },
+    // If apiKey still contains "..." (masked), it means user didn't edit it.
+    // Send empty so backend keeps the existing saved key.
+    const apiKeyToSend = aiConfig.apiKey.includes('...') ? '' : aiConfig.apiKey
+
+    await configApi.saveAI({
+      model: aiConfig.model,
+      baseUrl: aiConfig.baseUrl,
+      apiKey: apiKeyToSend,
+      maxRetries: aiConfig.maxRetries,
     })
+    // Reload to reflect saved state (shows masked key again)
+    await loadConfig()
   } catch (e: any) {
     alert('Save failed: ' + e.message)
   } finally {
@@ -388,8 +395,15 @@ async function testAiConnection() {
   testing.value = true
   aiTestResult.value = null
   try {
-    // Use lead team test as proxy for AI connectivity
-    const result = await teamsApi.test('lead')
+    // If apiKey is masked (contains "..."), don't send it — let backend use the real saved key.
+    // If user typed a new key, send it for testing.
+    const apiKeyToSend = aiConfig.apiKey.includes('...') ? undefined : (aiConfig.apiKey || undefined)
+
+    const result = await configApi.testAI({
+      model: aiConfig.model || undefined,
+      baseUrl: aiConfig.baseUrl || undefined,
+      apiKey: apiKeyToSend,
+    })
     aiTestResult.value = result
   } catch (e: any) {
     aiTestResult.value = { success: false, message: e.message || 'Connection test failed' }

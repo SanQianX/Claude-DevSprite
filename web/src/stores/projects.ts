@@ -34,6 +34,20 @@ export const useProjectsStore = defineStore('projects', () => {
     return projects.value.find(p => p.name === name)
   }
 
+  async function addProject(projectPath: string): Promise<Project> {
+    const project = await projectsApi.addProject(projectPath)
+    projects.value.push(project)
+    return project
+  }
+
+  async function removeProject(name: string): Promise<void> {
+    await projectsApi.deleteProject(name)
+    projects.value = projects.value.filter(p => p.name !== name)
+    if (currentProject.value?.name === name) {
+      currentProject.value = null
+    }
+  }
+
   return {
     projects,
     currentProject,
@@ -42,6 +56,8 @@ export const useProjectsStore = defineStore('projects', () => {
     fetchProjects,
     setProjects,
     setCurrentProject,
-    getProjectByName
+    getProjectByName,
+    addProject,
+    removeProject
   }
 })

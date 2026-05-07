@@ -47,6 +47,30 @@ export const projectsApi = {
   },
 
   /**
+   * POST /api/projects/add
+   * Manually add a project by path
+   * Returns: Project
+   */
+  async addProject(projectPath: string): Promise<Project> {
+    const response = await apiClient.post<Project>('/projects/add', { path: projectPath })
+    if (response.success && response.data) {
+      return response.data
+    }
+    throw new Error(response.error || 'Failed to add project')
+  },
+
+  /**
+   * DELETE /api/projects/:name
+   * Remove a project from the system (does NOT delete local files)
+   */
+  async deleteProject(projectName: string): Promise<void> {
+    const response = await apiClient.delete(`/projects/${projectName}`)
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to delete project')
+    }
+  },
+
+  /**
    * GET /api/projects/:name/file?path=...
    * Returns: { path, title, content, meta }
    */

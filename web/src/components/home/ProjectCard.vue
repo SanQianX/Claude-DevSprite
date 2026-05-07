@@ -1,6 +1,6 @@
 <template>
-  <tr class="project-row" @click="navigate">
-    <td class="cell-project">
+  <tr class="project-row">
+    <td class="cell-project" @click="navigate">
       <div class="project-info">
         <div class="project-icon" :style="{ backgroundColor: project.color || '#3b82f6' }">
           {{ project.name.charAt(0).toUpperCase() }}
@@ -8,25 +8,39 @@
         <span class="project-name">{{ project.name }}</span>
       </div>
     </td>
-    <td class="cell-repo">
+    <td class="cell-repo" @click="navigate">
       <span class="repo-badge" :class="repoType === 'Git' ? 'badge-git' : 'badge-local'">
         {{ repoType }}
       </span>
     </td>
-    <td class="cell-docs">{{ project.documentCount }}</td>
-    <td class="cell-update">
+    <td class="cell-docs" @click="navigate">{{ project.documentCount }}</td>
+    <td class="cell-update" @click="navigate">
       <div class="update-info">
         <span class="update-time">{{ formatDate(project.lastUpdated || '') }}</span>
         <span class="update-path">{{ shortPath(project.path) }}</span>
       </div>
     </td>
-    <td class="cell-status">
+    <td class="cell-status" @click="navigate">
       <div v-if="isAnalyzing" class="status-analyzing" :title="analysisStep">
         <span class="status-dot"></span>
-        <span>Analyzing</span>
+        <span>{{ t('project.analyzing') }}</span>
       </div>
       <div v-else-if="analysisFailed" class="status-failed" title="Analysis failed">
-        Failed
+        {{ t('project.failed') }}
+      </div>
+    </td>
+    <td class="cell-actions">
+      <div class="action-buttons">
+        <button class="action-btn action-chat" @click.stop="openChat" :title="t('project.openChat')">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M2 1a1 1 0 00-1 1v9a1 1 0 001 1h2.5a.5.5 0 01.5.5v2.207l2.854-2.854A.5.5 0 018.207 12H12a1 1 0 001-1V2a1 1 0 00-1-1H2zm0-1h10a2 2 0 012 2v9a2 2 0 01-2 2H8.207l-3.147 3.146A.5.5 0 014 13.793V13H2a2 2 0 01-2-2V2a2 2 0 012-2z"/>
+          </svg>
+        </button>
+        <button class="action-btn action-delete" @click.stop="handleDelete" :title="t('common.delete')">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M6.854 1.146a.5.5 0 01.708 0L8.707 2.5H13.5a.5.5 0 010 1h-.5v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9h-.5a.5.5 0 010-1h4.793L6.854 1.146zM5.5 5.5a.5.5 0 00-1 0v6a.5.5 0 001 0v-6zm3 0a.5.5 0 00-1 0v6a.5.5 0 001 0v-6z"/>
+          </svg>
+        </button>
       </div>
     </td>
   </tr>
@@ -37,15 +51,23 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAnalysisStore } from '@/stores/analysis'
+import { useProjectsStore } from '@/stores/projects'
+import { useUIStore } from '@/stores/ui'
 import type { Project } from '@/types'
 
 const props = defineProps<{
   project: Project
 }>()
 
+const emit = defineEmits<{
+  deleted: []
+}>()
+
 const router = useRouter()
 const analysisStore = useAnalysisStore()
+const projectsStore = useProjectsStore()
 const { progress } = storeToRefs(analysisStore)
+const { t } = storeToRefs(useUIStore())
 
 const repoType = computed(() => {
   const desc = (props.project.description || '').toLowerCase()
@@ -79,6 +101,22 @@ function navigate() {
   router.push(`/project/${props.project.name}`)
 }
 
+function openChat() {
+  router.push({ path: '/chat', query: { project: props.project.name } })
+}
+
+async function handleDelete() {
+  const msg = t.value('home.deleteConfirm', { name: props.project.name })
+  if (!confirm(msg)) return
+
+  try {
+    await projectsStore.removeProject(props.project.name)
+    emit('deleted')
+  } catch (e) {
+    alert(t.value('home.deleteFailed'))
+  }
+}
+
 function formatDate(dateString: string): string {
   if (!dateString) return 'Never'
   const date = new Date(dateString)
@@ -103,7 +141,6 @@ function shortPath(path: string): string {
 
 <style scoped>
 .project-row {
-  cursor: pointer;
   transition: background-color 0.15s;
   border-bottom: 1px solid var(--color-border-light, #e8ecf1);
 }
@@ -115,6 +152,14 @@ function shortPath(path: string): string {
 .project-row td {
   padding: 12px;
   vertical-align: middle;
+}
+
+.cell-project,
+.cell-repo,
+.cell-docs,
+.cell-update,
+.cell-status {
+  cursor: pointer;
 }
 
 .project-info {
@@ -216,6 +261,51 @@ function shortPath(path: string): string {
   background: #ffebe9;
   font-size: 12px;
   font-weight: 500;
+  color: #cf222e;
+}
+
+.cell-actions {
+  width: 80px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.project-row:hover .action-buttons {
+  opacity: 1;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md, 6px);
+  border: none;
+  cursor: pointer;
+  background: none;
+  transition: all 0.15s;
+}
+
+.action-chat {
+  color: var(--color-text-link, #0969da);
+}
+
+.action-chat:hover {
+  background: rgba(9, 105, 218, 0.1);
+}
+
+.action-delete {
+  color: var(--color-text-secondary, #656d76);
+}
+
+.action-delete:hover {
+  background: #ffebe9;
   color: #cf222e;
 }
 </style>

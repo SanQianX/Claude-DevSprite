@@ -37,7 +37,28 @@ export interface SystemConfig {
     maxDepth: number
     scanPaths: string[]
   }
+  ai?: {
+    model: string
+    baseUrl: string
+    hasApiKey: boolean
+    maskedApiKey: string
+    maxRetries: number
+  }
   dbPath?: string
+}
+
+export interface AIConfigPayload {
+  model?: string
+  baseUrl?: string
+  apiKey?: string
+  maxRetries?: number
+}
+
+export interface AITestResult {
+  success: boolean
+  message: string
+  latency?: number
+  model?: string
 }
 
 export const configApi = {
@@ -49,6 +70,28 @@ export const configApi = {
     return apiCall('/config', {
       method: 'PATCH',
       body: JSON.stringify(updates),
+    })
+  },
+
+  /**
+   * POST /api/config/ai
+   * Save AI provider configuration (model, baseUrl, apiKey, maxRetries)
+   */
+  async saveAI(payload: AIConfigPayload): Promise<{ status: string; message: string; ai: any }> {
+    return apiCall('/config/ai', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  /**
+   * POST /api/config/ai-test
+   * Test AI connection by making a real API call
+   */
+  async testAI(payload?: AIConfigPayload): Promise<AITestResult> {
+    return apiCall('/config/ai-test', {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
     })
   },
 }

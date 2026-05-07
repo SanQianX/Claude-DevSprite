@@ -3,19 +3,23 @@
  * GET /api/config
  * PUT /api/config
  * PATCH /api/config
+ * POST /api/config/ai-test
  */
 
 import type { Express, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../../config';
 import { dbPath } from '../../config';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('config');
 
-const CONFIG_OVERRIDE_FILE = path.join(os.homedir(), '.claude-dev-sprite', 'config.json');
+const CONFIG_DIR = path.join(os.homedir(), '.claude-dev-sprite');
+const CONFIG_OVERRIDE_FILE = path.join(CONFIG_DIR, 'config.json');
+const AI_ENV_FILE = path.join(CONFIG_DIR, '.env');
 
 function loadConfigOverride(): Record<string, any> {
   try {
@@ -29,11 +33,166 @@ function loadConfigOverride(): Record<string, any> {
 }
 
 function saveConfigOverride(data: Record<string, any>): void {
-  const dir = path.dirname(CONFIG_OVERRIDE_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(CONFIG_DIR)) {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
   }
   fs.writeFileSync(CONFIG_OVERRIDE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+/**
+ * Mask an API key for display, e.g. "tp-cwfrlf4o...cgse8"
+ */
+function maskApiKey(key: string): string {
+  if (!key) return '';
+  if (key.length <= 8) return '****';
+  return key.substring(0, 8) + '...' + key.substring(key.length - 4);
+}
+
+/**
+ * Load current AI config from env file, process env, and config override
+ */
+function loadAIConfig(): { model: string; baseUrl: string; hasApiKey: boolean; maskedApiKey: string; maxRetries: number } {
+  let model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
+  let baseUrl = process.env.ANTHROPIC_BASE_URL || '';
+  let apiKey = process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '';
+  let maxRetries = 3;
+
+  // Load from AI env file
+  if (fs.existsSync(AI_ENV_FILE)) {
+    try {
+      const content = fs.readFileSync(AI_ENV_FILE, 'utf-8');
+      for (const line of content.split('\n')) {
+        const kvMatch = line.match(/^([^#=]+)=(.*)$/);
+        if (kvMatch) {
+          const key = kvMatch[1].trim();
+          const val = kvMatch[2].trim();
+          if (key === 'ANTHROPIC_MODEL') model = val;
+          else if (key === 'ANTHROPIC_BASE_URL') baseUrl = val;
+          else if (key === 'ANTHROPIC_API_KEY') apiKey = val;
+          else if (key === 'ANTHROPIC_AUTH_TOKEN' && !apiKey) apiKey = val;
+        }
+      }
+    } catch (err) {
+      logger.warn('Failed to read AI env file', err);
+    }
+  }
+
+  // Load from config override
+  const override = loadConfigOverride();
+  if (override.ai?.model) model = override.ai.model;
+  if (override.ai?.baseUrl !== undefined) baseUrl = override.ai.baseUrl;
+  if (override.ai?.apiKey) apiKey = override.ai.apiKey;
+  if (override.analysis?.maxRetries) maxRetries = override.analysis.maxRetries;
+
+  return { model, baseUrl, hasApiKey: !!apiKey, maskedApiKey: maskApiKey(apiKey), maxRetries };
+}
+
+/**
+ * Save AI config to both the env file and config override
+ */
+function saveAIConfig(model: string, baseUrl: string, apiKey: string, maxRetries: number): void {
+  // If apiKey is empty, keep the existing one from env/process
+  const currentConfig = loadAIConfigFromEnv();
+  const effectiveApiKey = apiKey || currentConfig.apiKey || process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '';
+
+  // Save to .env file
+  const envLines: string[] = [];
+  if (effectiveApiKey) {
+    envLines.push(`ANTHROPIC_API_KEY=${effectiveApiKey}`);
+  }
+  if (baseUrl) {
+    envLines.push(`ANTHROPIC_BASE_URL=${baseUrl}`);
+  }
+  if (model) {
+    envLines.push(`ANTHROPIC_MODEL=${model}`);
+  }
+
+  if (!fs.existsSync(CONFIG_DIR)) {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  }
+  fs.writeFileSync(AI_ENV_FILE, envLines.join('\n') + '\n', 'utf-8');
+
+  // Also update process env so it takes effect immediately
+  if (model) process.env.ANTHROPIC_MODEL = model;
+  if (baseUrl) process.env.ANTHROPIC_BASE_URL = baseUrl;
+  if (effectiveApiKey) process.env.ANTHROPIC_API_KEY = effectiveApiKey;
+
+  // Save non-sensitive config to config.json
+  const current = loadConfigOverride();
+  current.ai = {
+    model,
+    baseUrl,
+    hasApiKey: !!effectiveApiKey,
+  };
+  current.analysis = {
+    ...current.analysis,
+    maxRetries,
+  };
+  saveConfigOverride(current);
+
+  logger.info(`AI config saved: model=${model}, baseUrl=${baseUrl}, hasApiKey=${!!effectiveApiKey}`);
+}
+
+/**
+ * Load API key ONLY from the user's .env file (not process.env from start script).
+ * Used by test endpoint so user can verify their own key.
+ */
+function loadSavedApiKey(): string {
+  let apiKey = '';
+
+  if (fs.existsSync(AI_ENV_FILE)) {
+    try {
+      const content = fs.readFileSync(AI_ENV_FILE, 'utf-8');
+      for (const line of content.split('\n')) {
+        const kvMatch = line.match(/^([^#=]+)=(.*)$/);
+        if (kvMatch) {
+          const key = kvMatch[1].trim();
+          const val = kvMatch[2].trim();
+          if (key === 'ANTHROPIC_API_KEY') apiKey = val;
+          else if (key === 'ANTHROPIC_AUTH_TOKEN' && !apiKey) apiKey = val;
+        }
+      }
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  return apiKey;
+}
+
+/**
+ * Load AI config only from env file and process env (not config override)
+ */
+function loadAIConfigFromEnv(): { apiKey: string; baseUrl: string; model: string } {
+  let apiKey = '';
+  let baseUrl = '';
+  let model = '';
+
+  if (fs.existsSync(AI_ENV_FILE)) {
+    try {
+      const content = fs.readFileSync(AI_ENV_FILE, 'utf-8');
+      for (const line of content.split('\n')) {
+        const kvMatch = line.match(/^([^#=]+)=(.*)$/);
+        if (kvMatch) {
+          const key = kvMatch[1].trim();
+          const val = kvMatch[2].trim();
+          if (key === 'ANTHROPIC_API_KEY') apiKey = val;
+          else if (key === 'ANTHROPIC_AUTH_TOKEN' && !apiKey) apiKey = val;
+          else if (key === 'ANTHROPIC_BASE_URL') baseUrl = val;
+          else if (key === 'ANTHROPIC_MODEL') model = val;
+        }
+      }
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  if (process.env.ANTHROPIC_API_KEY) apiKey = process.env.ANTHROPIC_API_KEY;
+  if (process.env.ANTHROPIC_AUTH_TOKEN && !apiKey) apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
+  if (process.env.ANTHROPIC_BASE_URL) baseUrl = process.env.ANTHROPIC_BASE_URL;
+  if (process.env.ANTHROPIC_MODEL) model = process.env.ANTHROPIC_MODEL;
+
+  return { apiKey, baseUrl, model };
 }
 
 function deepMerge(target: Record<string, any>, source: Record<string, any>): Record<string, any> {
@@ -55,6 +214,7 @@ export function registerConfigRoutes(app: Express): void {
    */
   app.get('/api/config', (_req: Request, res: Response) => {
     const override = loadConfigOverride();
+    const aiConfig = loadAIConfig();
 
     const baseConfig = {
       server: config.server,
@@ -67,7 +227,7 @@ export function registerConfigRoutes(app: Express): void {
         fullAnalysisIntervalDays: config.analysis.fullAnalysisIntervalDays,
         fullAnalysisTriggers: config.analysis.fullAnalysisTriggers,
         diffMaxTokens: config.analysis.diffMaxTokens,
-        maxRetries: config.analysis.maxRetries,
+        maxRetries: aiConfig.maxRetries,
       },
       detection: {
         preferredStrategy: config.detection.preferredStrategy,
@@ -84,11 +244,132 @@ export function registerConfigRoutes(app: Express): void {
         maxDepth: config.projectDiscovery.maxDepth,
         scanPaths: config.projectDiscovery.scanPaths,
       },
+      ai: {
+        model: aiConfig.model,
+        baseUrl: aiConfig.baseUrl,
+        hasApiKey: aiConfig.hasApiKey,
+        maskedApiKey: aiConfig.maskedApiKey,
+        maxRetries: aiConfig.maxRetries,
+      },
       dbPath: dbPath.replace(process.env.HOME || process.env.USERPROFILE || '', '~'),
     };
 
     const merged = Object.keys(override).length > 0 ? deepMerge(baseConfig, override) : baseConfig;
+    // Ensure ai section always has latest values from loadAIConfig
+    merged.ai = baseConfig.ai;
     res.json(merged);
+  });
+
+  /**
+   * POST /api/config/ai
+   * Save AI provider configuration (model, baseUrl, apiKey, maxRetries)
+   */
+  app.post('/api/config/ai', (req: Request, res: Response) => {
+    try {
+      const { model, baseUrl, apiKey, maxRetries } = req.body;
+
+      if (!model && !baseUrl && apiKey === undefined && maxRetries === undefined) {
+        res.status(400).json({ status: 'error', message: 'No AI config fields provided' });
+        return;
+      }
+
+      // Merge with existing config (keep existing values if not provided)
+      const current = loadAIConfig();
+      saveAIConfig(
+        model || current.model,
+        baseUrl !== undefined ? baseUrl : current.baseUrl,
+        apiKey || '',  // Empty string means keep existing (loadAIConfig handles this)
+        maxRetries ?? current.maxRetries,
+      );
+
+      const updated = loadAIConfig();
+      res.json({
+        status: 'ok',
+        message: 'AI configuration saved. Changes take effect on next analysis run.',
+        ai: updated,
+      });
+    } catch (error) {
+      logger.error('Error saving AI configuration', error);
+      res.status(500).json({ status: 'error', message: 'Failed to save AI configuration' });
+    }
+  });
+
+  /**
+   * POST /api/config/ai-test
+   * Test AI connection by making a real API call.
+   * Uses ONLY the key from the UI input or the saved .env file.
+   * Does NOT fall back to ANTHROPIC_AUTH_TOKEN from the start script,
+   * so the user can verify the key they typed actually works.
+   */
+  app.post('/api/config/ai-test', async (req: Request, res: Response) => {
+    try {
+      // Only use the key from UI input or the user's saved .env file.
+      // Do NOT fall back to process.env (start-worker.cmd token),
+      // so the user can verify the key they actually saved.
+      const savedApiKey = loadSavedApiKey();
+      const savedConfig = loadAIConfigFromEnv();
+      const testModel = req.body.model || savedConfig.model || 'claude-sonnet-4-6';
+      const testBaseUrl = req.body.baseUrl || savedConfig.baseUrl || process.env.ANTHROPIC_BASE_URL;
+      const testApiKey = req.body.apiKey || savedApiKey;
+
+      if (!testApiKey) {
+        res.json({ success: false, message: 'No API key provided. Please enter your API key and click Save first.' });
+        return;
+      }
+
+      const keySource = req.body.apiKey ? 'input' : 'saved';
+      const maskedKey = maskApiKey(testApiKey);
+
+      const clientOptions: { apiKey: string; baseURL?: string } = { apiKey: testApiKey };
+      if (testBaseUrl) {
+        clientOptions.baseURL = testBaseUrl;
+      }
+
+      const client = new Anthropic(clientOptions);
+
+      const startTime = Date.now();
+      const response = await client.messages.create({
+        model: testModel,
+        max_tokens: 32,
+        messages: [{ role: 'user', content: 'Reply with only: OK' }],
+      });
+      const latency = Date.now() - startTime;
+
+      const text = response.content
+        .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+        .map(block => block.text)
+        .join('');
+
+      res.json({
+        success: true,
+        message: `Connection successful. Key used: ${maskedKey} (${keySource}), Model: ${testModel}, Latency: ${latency}ms`,
+        latency,
+        model: testModel,
+        maskedKey,
+        keySource,
+      });
+    } catch (error: any) {
+      logger.error('AI connection test failed', error);
+      let message = error.message || 'Connection failed';
+
+      // Extract more useful error messages
+      if (error.status === 401) {
+        message = 'Authentication failed: Invalid API key';
+      } else if (error.status === 403) {
+        message = 'Access denied: API key does not have permission to use this model';
+      } else if (error.status === 404) {
+        message = `Model not found: "${req.body.model || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'}" does not exist or is not available`;
+      } else if (error.status === 429) {
+        message = 'Rate limited: Too many requests. Try again later.';
+      } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        message = `Cannot connect to server: ${req.body.baseUrl || 'api.anthropic.com'}`;
+      }
+
+      res.json({
+        success: false,
+        message,
+      });
+    }
   });
 
   /**
@@ -99,19 +380,8 @@ export function registerConfigRoutes(app: Express): void {
     try {
       const updates = req.body;
 
-      // Validate that the update is an object
       if (!updates || typeof updates !== 'object') {
         res.status(400).json({ status: 'error', message: 'Configuration must be an object' });
-        return;
-      }
-
-      // Sensitive keys that should not be set
-      const blockedKeys = ['apiKey', 'authToken', 'password', 'secret'];
-      const hasBlocked = JSON.stringify(updates).toLowerCase().match(
-        new RegExp(blockedKeys.join('|'), 'i')
-      );
-      if (hasBlocked) {
-        res.status(400).json({ status: 'error', message: 'Cannot set sensitive configuration' });
         return;
       }
 

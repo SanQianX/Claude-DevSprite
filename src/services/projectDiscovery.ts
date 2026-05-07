@@ -357,6 +357,30 @@ export class ProjectDiscoveryService {
   }
 
   /**
+   * Remove a project from the system (does NOT delete local files)
+   */
+  async removeProject(name: string): Promise<void> {
+    const db = await getDatabase();
+    const project = db.getProject(name);
+
+    if (!project) {
+      throw new Error(`Project not found: ${name}`);
+    }
+
+    // Delete all related data from DB
+    db.deleteDocumentsByProject(project.id);
+    db.deleteRelationsByProject(project.id);
+    db.deleteAnalysisLogsByProject(project.id);
+    db.deleteLinksByProject(project.id);
+    db.deleteProject(project.id);
+
+    // Remove from in-memory cache
+    this.discoveredProjects.delete(project.path);
+
+    logger.info(`Removed project from system: ${name} (${project.path})`);
+  }
+
+  /**
    * Generate a consistent color for a project name
    */
   private generateProjectColor(name: string): string {

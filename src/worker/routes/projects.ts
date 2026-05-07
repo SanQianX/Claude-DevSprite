@@ -4,6 +4,7 @@
  * GET /api/projects/:name
  * POST /api/projects/discover
  * POST /api/projects/add
+ * DELETE /api/projects/:name
  */
 
 import type { Express, Request, Response } from 'express';
@@ -112,6 +113,25 @@ export function registerProjectRoutes(app: Express): void {
     } catch (error) {
       logger.error('Error adding project', error);
       throw createError('Failed to add project', 500, error);
+    }
+  }));
+
+  /**
+   * DELETE /api/projects/:name
+   * Remove a project from the system (does NOT delete local files)
+   */
+  app.delete('/api/projects/:name', asyncHandler(async (req: Request, res: Response) => {
+    const { name } = req.params;
+
+    try {
+      const projectDiscovery = getProjectDiscoveryService();
+      await projectDiscovery.removeProject(name);
+
+      res.json({ success: true, message: `Project "${name}" removed from system` });
+    } catch (error) {
+      logger.error('Error removing project', error);
+      const message = error instanceof Error ? error.message : 'Failed to remove project';
+      throw createError(message, error instanceof Error && 'statusCode' in error ? (error as any).statusCode : 500, error);
     }
   }));
 

@@ -18,22 +18,38 @@
         <SearchBar
           v-model="searchQuery"
           @search="handleSearch"
-          placeholder="Search project..."
+          :placeholder="t('common.search')"
         />
       </div>
     </div>
-
-    <router-link to="/settings" class="icon-button settings-btn" aria-label="Settings" title="System Settings">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
-      </svg>
-    </router-link>
 
     <div class="header-right">
       <div v-if="isRunning" class="analysis-indicator" :title="stepLabel">
         <span class="pulse-dot"></span>
         <span class="indicator-text">{{ currentProject || 'Analyzing...' }}</span>
       </div>
+
+      <!-- Language Switcher -->
+      <button class="icon-button" :title="t('common.language')" @click="uiStore.toggleLocale()">
+        <span class="lang-label">{{ locale === 'zh-CN' ? '中' : 'EN' }}</span>
+      </button>
+
+      <!-- Theme Toggle -->
+      <button class="icon-button" :title="t('common.theme')" @click="toggleTheme">
+        <svg v-if="theme === 'light'" width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 1a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 1zm0 10a2 2 0 100-4 2 2 0 000 4zm5.25-2.75a.75.75 0 010 1.5h-1.5a.75.75 0 010-1.5h1.5zM8 12a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 12zm-3.75-3.75a.75.75 0 010 1.5h-1.5a.75.75 0 010-1.5h1.5zm7.03-4.28a.75.75 0 010 1.06l-1.06 1.06a.75.75 0 11-1.06-1.06l1.06-1.06a.75.75 0 011.06 0zM5.78 9.72a.75.75 0 010 1.06L4.72 11.84a.75.75 0 01-1.06-1.06l1.06-1.06a.75.75 0 011.06 0zm6.5-6.5a.75.75 0 010 1.06L11.22 5.34a.75.75 0 01-1.06-1.06l1.06-1.06a.75.75 0 011.06 0zM5.78 6.28a.75.75 0 010 1.06L4.72 8.4a.75.75 0 01-1.06-1.06l1.06-1.06a.75.75 0 011.06 0z"/>
+        </svg>
+        <svg v-else width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M9.598 1.591a.75.75 0 01.785-.175 7 7 0 11-8.967 8.967.75.75 0 01.961-.967 5.5 5.5 0 007.046-7.046.75.75 0 01.175-.785zm1.616 1.334a7.004 7.004 0 01-4.68 9.263 5.504 5.504 0 004.68-9.263z"/>
+        </svg>
+      </button>
+
+      <!-- Settings -->
+      <router-link to="/settings" class="icon-button" :title="t('common.settings')" aria-label="Settings">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+          <path fill-rule="evenodd" d="M9.19 2.53c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM8 10.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" clip-rule="evenodd"/>
+        </svg>
+      </router-link>
     </div>
   </header>
 </template>
@@ -44,15 +60,22 @@ import { useRouter, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useSearchStore } from '@/stores/search'
 import { useAnalysisStore } from '@/stores/analysis'
+import { useUIStore } from '@/stores/ui'
 import SearchBar from '@/components/common/SearchBar.vue'
 
 const router = useRouter()
 const route = useRoute()
 const searchStore = useSearchStore()
 const analysisStore = useAnalysisStore()
+const uiStore = useUIStore()
 const { isRunning, currentProject, stepLabel } = storeToRefs(analysisStore)
+const { theme, locale, t } = storeToRefs(uiStore)
 
 const searchQuery = ref('')
+
+function toggleTheme() {
+  uiStore.setTheme(theme.value === 'light' ? 'dark' : 'light')
+}
 
 async function handleSearch(q: string) {
   if (!q.trim()) {
@@ -78,7 +101,7 @@ onUnmounted(() => {
 
 <style scoped>
 .app-header {
-  height: 60px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -120,7 +143,7 @@ onUnmounted(() => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .icon-button {
@@ -129,14 +152,24 @@ onUnmounted(() => {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
-  transition: all var(--transition-fast);
+  border-radius: var(--radius-md, 6px);
+  color: var(--color-text-secondary, #656d76);
+  transition: all var(--transition-fast, 150ms ease);
+  cursor: pointer;
+  border: none;
+  background: none;
+  text-decoration: none;
 }
 
 .icon-button:hover {
-  background-color: var(--color-bg-secondary);
-  color: var(--color-text);
+  background-color: var(--color-bg-secondary, #f6f8fa);
+  color: var(--color-text, #1f2328);
+}
+
+.lang-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .analysis-indicator {
@@ -144,10 +177,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-md, 6px);
   background-color: rgba(59, 130, 246, 0.1);
   font-size: 12px;
-  color: var(--color-primary);
+  color: var(--color-text-link, #0969da);
   white-space: nowrap;
 }
 
@@ -155,7 +188,7 @@ onUnmounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: var(--color-primary);
+  background-color: var(--color-text-link, #0969da);
   animation: pulse 1.5s ease-in-out infinite;
 }
 

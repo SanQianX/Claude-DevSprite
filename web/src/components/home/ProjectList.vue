@@ -8,6 +8,7 @@
           <th class="col-docs">Docs</th>
           <th class="col-update">Last Update</th>
           <th class="col-status">Status</th>
+          <th class="col-actions"></th>
         </tr>
       </thead>
       <tbody>
@@ -15,6 +16,7 @@
           v-for="project in projects"
           :key="project.name"
           :project="project"
+          @deleted="$emit('deleted')"
         />
       </tbody>
     </table>
@@ -27,6 +29,10 @@ import ProjectCard from './ProjectCard.vue'
 
 defineProps<{
   projects: Project[]
+}>()
+
+defineEmits<{
+  deleted: []
 }>()
 </script>
 
