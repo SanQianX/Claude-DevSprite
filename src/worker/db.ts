@@ -96,6 +96,11 @@ export interface Review {
   suggestion: string | null;
   source: string;
   status: string;
+  commit_hash: string | null;
+  file_path: string | null;
+  line: number | null;
+  category: string | null;
+  description: string | null;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
@@ -255,12 +260,35 @@ export class DatabaseManager {
         suggestion  TEXT,
         source      TEXT DEFAULT 'manual',
         status      TEXT NOT NULL DEFAULT 'pending',
+        commit_hash TEXT,
+        file_path   TEXT,
+        line        INTEGER,
+        category    TEXT,
+        description TEXT,
         created_at  TEXT NOT NULL,
         updated_at  TEXT NOT NULL,
         resolved_at TEXT,
         FOREIGN KEY (project_id) REFERENCES projects(id)
       )
     `);
+
+    // Migration: add new columns to existing reviews table
+    const reviewColumns = this.queryAll("PRAGMA table_info(reviews)") as any[];
+    const reviewColNames = new Set(reviewColumns.map((c: any) => c.name));
+    const newReviewCols = [
+      { name: 'commit_hash', type: 'TEXT' },
+      { name: 'file_path', type: 'TEXT' },
+      { name: 'line', type: 'INTEGER' },
+      { name: 'category', type: 'TEXT' },
+      { name: 'description', type: 'TEXT' },
+    ];
+    for (const col of newReviewCols) {
+      if (!reviewColNames.has(col.name)) {
+        try {
+          this.db.run(`ALTER TABLE reviews ADD COLUMN ${col.name} ${col.type}`);
+        } catch { /* column already exists */ }
+      }
+    }
 
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_reviews_project ON reviews(project_id)`);
@@ -571,6 +599,10 @@ export class DatabaseManager {
     return this.queryAll('SELECT * FROM reviews WHERE project_id = ? ORDER BY created_at DESC', [projectId]) as Review[];
   }
 
+  getPendingReviews(projectId: string): Review[] {
+    return this.queryAll('SELECT * FROM reviews WHERE project_id = ? AND status = ? ORDER BY created_at DESC', [projectId, 'pending']) as Review[];
+  }
+
   getReview(id: number): Review | undefined {
     return this.queryOne('SELECT * FROM reviews WHERE id = ?', [id]) as Review | undefined;
   }
@@ -578,9 +610,9 @@ export class DatabaseManager {
   createReview(review: Omit<Review, 'id' | 'created_at' | 'updated_at' | 'resolved_at'>): Review {
     const now = new Date().toISOString();
     this.run(
-      `INSERT INTO reviews (project_id, title, severity, location, suggestion, source, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [review.project_id, review.title, review.severity, review.location, review.suggestion, review.source, review.status, now, now]
+      `INSERT INTO reviews (project_id, title, severity, location, suggestion, source, status, commit_hash, file_path, line, category, description, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [review.project_id, review.title, review.severity, review.location || null, review.suggestion || null, review.source || 'ai', review.status, review.commit_hash || null, review.file_path || null, review.line || null, review.category || null, review.description || null, now, now]
     );
     const row = this.queryOne('SELECT last_insert_rowid() as id');
     const id = row ? row.id : 0;
@@ -599,6 +631,23 @@ export class DatabaseManager {
 
   deleteReview(id: number): void {
     this.run('DELETE FROM reviews WHERE id = ?', [id]);
+    this.save();
+  }
+
+  getLatestReviewCommit(projectId: string): string | null {
+    const row = this.queryOne(
+      'SELECT commit_hash FROM reviews WHERE project_id = ? AND commit_hash IS NOT NULL ORDER BY created_at DESC LIMIT 1',
+      [projectId]
+    );
+    return row ? row.commit_hash : null;
+  }
+
+  updateLastReviewCommit(projectId: string, commitHash: string): void {
+    // Store in a simple key-value style using the projects table
+    this.run(
+      `UPDATE projects SET last_analysis_commit = ? WHERE id = ?`,
+      [commitHash, projectId]
+    );
     this.save();
   }
 

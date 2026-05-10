@@ -119,6 +119,11 @@ export function registerDashboardRoutes(app: Express): void {
       suggestion: suggestion || null,
       source: source || 'manual',
       status: 'pending',
+      commit_hash: null,
+      file_path: null,
+      line: null,
+      category: null,
+      description: null,
     });
 
     logger.info(`Review created: ${title} for project ${projectName}`);
