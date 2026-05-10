@@ -122,4 +122,82 @@ export function registerSourceTreeRoutes(app: Express): void {
     const content = fs.readFileSync(fullPath, 'utf-8');
     res.json({ path: filePath, content, size: stat.size });
   }));
+
+  /**
+   * GET /api/projects/:name/related-docs?path=...
+   * Returns markdown documents that reference the given source file via [source:path:line]
+   */
+  app.get('/api/projects/:name/related-docs', asyncHandler(async (req: Request, res: Response) => {
+    const projectName = req.params.name;
+    const sourcePath = req.query.path as string;
+    if (!sourcePath) throw createError('Path is required', 400);
+
+    const db = await getDatabase();
+    const project = db.getProject(projectName);
+    if (!project) throw createError('Project not found', 404);
+
+    const knowledgePath = project.knowledge_path;
+    if (!fs.existsSync(knowledgePath)) {
+      res.json({ docs: [] });
+      return;
+    }
+
+    const relatedDocs = searchRelatedDocs(knowledgePath, sourcePath);
+    res.json({ docs: relatedDocs });
+  }));
+}
+
+interface RelatedDoc {
+  path: string;
+  title: string;
+  lines: number[];
+}
+
+function searchRelatedDocs(knowledgePath: string, sourcePath: string): RelatedDoc[] {
+  const results: RelatedDoc[] = [];
+  const escapedPath = sourcePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`\\[source:${escapedPath}:(\\d+)\\]`, 'g');
+
+  function walkDir(dir: string) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!entry.name.startsWith('.') && entry.name !== 'node_modules') {
+          walkDir(fullPath);
+        }
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        try {
+          const content = fs.readFileSync(fullPath, 'utf-8');
+          const lines: number[] = [];
+          const contentLines = content.split('\n');
+          for (let i = 0; i < contentLines.length; i++) {
+            if (pattern.test(contentLines[i])) {
+              lines.push(i + 1);
+            }
+            // Reset regex lastIndex since we're using test in a loop
+            pattern.lastIndex = 0;
+          }
+          if (lines.length > 0) {
+            const relPath = path.relative(knowledgePath, fullPath).replace(/\\/g, '/');
+            // Extract title from first heading or filename
+            const titleMatch = content.match(/^#\s+(.+)$/m);
+            const title = titleMatch ? titleMatch[1].trim() : entry.name.replace(/\.md$/, '');
+            results.push({ path: relPath, title, lines });
+          }
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    }
+  }
+
+  walkDir(knowledgePath);
+  return results;
 }

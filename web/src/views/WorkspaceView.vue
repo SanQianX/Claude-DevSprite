@@ -37,8 +37,10 @@
       >
         <DocPanel
           :project-name="projectName"
+          :active-doc-path="activeDocPath"
           @close="togglePanel('doc')"
           @doc-select="onDocSelect"
+          @source-link-click="onSourceLinkClick"
         />
       </div>
 
@@ -57,8 +59,11 @@
       >
         <CodePanel
           :project-name="projectName"
+          :highlight-path="highlightedSourcePath"
+          :highlight-line="highlightedSourceLine"
           @close="togglePanel('code')"
           @file-select="onFileSelect"
+          @doc-navigate="onDocNavigate"
         />
       </div>
 
@@ -91,7 +96,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import DocPanel from '@/components/workspace/DocPanel.vue'
 import CodePanel from '@/components/workspace/CodePanel.vue'
 import ChatPanel from '@/components/workspace/ChatPanel.vue'
@@ -99,6 +105,9 @@ import ChatPanel from '@/components/workspace/ChatPanel.vue'
 const props = defineProps<{
   projectName: string
 }>()
+
+const route = useRoute()
+const router = useRouter()
 
 const panels = reactive({
   doc: true,
@@ -113,22 +122,71 @@ const panelWidths = reactive({
 
 const panelsContainer = ref<HTMLElement | null>(null)
 
+const highlightedSourcePath = ref('')
+const highlightedSourceLine = ref(0)
+const activeDocPath = ref('')
+const activeFilePath = ref('')
+
 const activePanelCount = computed(() =>
   Object.values(panels).filter(Boolean).length
 )
 
+// Sync URL query params → panel state (on mount / route change)
+function syncFromUrl() {
+  const q = route.query
+  if (q.doc) activeDocPath.value = q.doc as string
+  if (q.code) activeFilePath.value = q.code as string
+  if (q.panels) {
+    const names = (q.panels as string).split(',')
+    panels.doc = names.includes('doc')
+    panels.code = names.includes('code')
+    panels.chat = names.includes('chat')
+  }
+}
+
+// Sync panel state → URL query params
+function syncToUrl() {
+  const query: Record<string, string> = {}
+  if (activeDocPath.value) query.doc = activeDocPath.value
+  if (activeFilePath.value) query.code = activeFilePath.value
+  const panelNames = Object.entries(panels).filter(([, v]) => v).map(([k]) => k)
+  if (panelNames.length < 3) query.panels = panelNames.join(',')
+  router.replace({ query })
+}
+
 function togglePanel(name: 'doc' | 'code' | 'chat') {
   panels[name] = !panels[name]
+  syncToUrl()
 }
 
 function onDocSelect(path: string) {
-  // Future: sync with URL params
-  console.log('Doc selected:', path)
+  activeDocPath.value = path
+  syncToUrl()
 }
 
 function onFileSelect(path: string) {
-  // Future: sync with URL params
-  console.log('File selected:', path)
+  activeFilePath.value = path
+  syncToUrl()
+}
+
+function onDocNavigate(docPath: string) {
+  // Open Doc panel if closed and navigate to the doc
+  if (!panels.doc) {
+    panels.doc = true
+  }
+  activeDocPath.value = docPath
+  syncToUrl()
+}
+
+function onSourceLinkClick(path: string, line: number) {
+  // Open Code panel if closed and navigate to the file
+  if (!panels.code) {
+    panels.code = true
+  }
+  highlightedSourcePath.value = path
+  highlightedSourceLine.value = line
+  activeFilePath.value = path
+  syncToUrl()
 }
 
 let resizeState: { type: string; startX: number; startWidths: Record<string, number> } | null = null
@@ -160,6 +218,14 @@ function stopResize() {
   document.removeEventListener('mousemove', onResize)
   document.removeEventListener('mouseup', stopResize)
 }
+
+// Initialize from URL on mount
+syncFromUrl()
+
+// Watch for external route changes (e.g., browser back/forward)
+watch(() => route.query, () => {
+  syncFromUrl()
+})
 </script>
 
 <style scoped>

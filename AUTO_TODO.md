@@ -48,11 +48,11 @@
 
 ## Phase 4 — Doc↔Code 关联
 
-- [ ] 4.1 文档中 [source:path:line] 链接解析
-- [ ] 4.2 点击跳转 + 行高亮动画
-- [ ] 4.3 Code 面板底部关联文档链接
-- [ ] 4.4 URL query params 同步（doc/code/chat 路径同步到 URL）
-- [ ] 4.5 构建验证 + 回归测试
+- [x] 4.1 文档中 [source:path:line] 链接解析
+- [x] 4.2 点击跳转 + 行高亮动画
+- [x] 4.3 Code 面板底部关联文档链接
+- [x] 4.4 URL query params 同步（doc/code/chat 路径同步到 URL）
+- [x] 4.5 构建验证 + 回归测试
 
 ## Phase 5 — AI 审查集成
 

@@ -37,16 +37,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { marked } from 'marked'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   projectName: string
-}>()
+  activeDocPath?: string
+}>(), {
+  activeDocPath: '',
+})
 
 const emit = defineEmits<{
   close: []
   docSelect: [path: string]
+  sourceLinkClick: [path: string, line: number]
 }>()
 
 interface DocItem {
@@ -60,6 +64,22 @@ const currentDoc = ref<DocItem | null>(null)
 const currentDocPath = ref('')
 const renderedContent = ref('')
 const loading = ref(false)
+const docBodyRef = ref<HTMLElement | null>(null)
+
+// Custom renderer to convert [source:path:line] to clickable links
+const renderer = new marked.Renderer()
+const originalParagraph = renderer.paragraph.bind(renderer)
+renderer.paragraph = function (tokens: any) {
+  let text = this.parser.parseInline(tokens) as string
+  // Replace [source:path:line] patterns with clickable links
+  text = text.replace(
+    /\[source:([^\]]+?):(\d+)\]/g,
+    '<a class="source-link" data-path="$1" data-line="$2" href="javascript:void(0)">📍 $1:$2</a>'
+  )
+  return `<p>${text}</p>`
+}
+
+marked.setOptions({ renderer })
 
 async function fetchDocuments() {
   loading.value = true
@@ -105,10 +125,29 @@ async function selectDoc(doc: DocItem) {
     const data = await res.json()
     if (data.content) {
       renderedContent.value = marked.parse(data.content) as string
+      await nextTick()
+      bindSourceLinks()
     }
   } catch {
     renderedContent.value = '<p>加载文档失败</p>'
   }
+}
+
+function bindSourceLinks() {
+  nextTick(() => {
+    const el = document.querySelector('.doc-body')
+    if (!el) return
+    el.querySelectorAll('.source-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault()
+        const path = (e.target as HTMLElement).getAttribute('data-path')
+        const line = parseInt((e.target as HTMLElement).getAttribute('data-line') || '1', 10)
+        if (path) {
+          emit('sourceLinkClick', path, line)
+        }
+      })
+    })
+  })
 }
 
 onMounted(() => {
@@ -118,6 +157,13 @@ onMounted(() => {
 watch(() => props.projectName, () => {
   currentDoc.value = null
   fetchDocuments()
+})
+
+watch(() => props.activeDocPath, (newPath) => {
+  if (newPath && documents.value.length > 0) {
+    const doc = documents.value.find(d => d.path === newPath)
+    if (doc) selectDoc(doc)
+  }
 })
 </script>
 
@@ -269,5 +315,22 @@ watch(() => props.projectName, () => {
   background: transparent;
   padding: 0;
   color: inherit;
+}
+
+.doc-body :deep(.source-link) {
+  color: #3b82f6;
+  text-decoration: none;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 2px 6px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.doc-body :deep(.source-link:hover) {
+  background: #dbeafe;
+  text-decoration: underline;
 }
 </style>
