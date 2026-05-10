@@ -7,7 +7,32 @@
       <button class="panel-close" @click="$emit('close')">✕</button>
     </div>
     <div class="chat-messages" ref="messagesRef">
-      <div v-if="messages.length === 0" class="chat-empty">
+      <!-- Memory Banner -->
+      <div v-if="memoryContext" class="memory-banner">
+        <div class="memory-header" @click="memoryExpanded = !memoryExpanded">
+          <span class="memory-icon">🧠</span>
+          <span class="memory-title">项目记忆</span>
+          <span class="memory-stats">{{ memoryContext.stats.pendingTasks }} 待办 / {{ memoryContext.stats.pendingReviews }} 待查</span>
+          <span class="memory-toggle">{{ memoryExpanded ? '▼' : '▶' }}</span>
+        </div>
+        <div v-if="memoryExpanded" class="memory-body">
+          <div class="memory-summary">{{ memoryContext.summary }}</div>
+          <div v-if="memoryContext.activeTasks.length > 0" class="memory-section">
+            <div class="memory-section-title">进行中任务</div>
+            <div v-for="task in memoryContext.activeTasks.slice(0, 3)" :key="task.id" class="memory-item">
+              {{ task.title }}
+            </div>
+          </div>
+          <div v-if="memoryContext.recentReviews.length > 0" class="memory-section">
+            <div class="memory-section-title">最近审查</div>
+            <div v-for="review in memoryContext.recentReviews.slice(0, 3)" :key="review.id" class="memory-item">
+              <span :class="'severity-' + review.severity">{{ review.severity }}</span> {{ review.title }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="messages.length === 0 && !memoryContext" class="chat-empty">
         开始新的对话...
       </div>
       <div v-for="(msg, i) in messages" :key="i" class="message" :class="'msg-' + msg.role">
@@ -30,9 +55,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   projectName: string
 }>()
 
@@ -45,9 +70,34 @@ interface Message {
   content: string
 }
 
+interface MemoryContext {
+  summary: string
+  activeTasks: Array<{ id: number; title: string; status: string }>
+  recentReviews: Array<{ id: number; title: string; severity: string; status: string }>
+  stats: { pendingTasks: number; pendingReviews: number; totalTasks: number; totalReviews: number }
+}
+
 const messages = ref<Message[]>([])
 const input = ref('')
 const messagesRef = ref<HTMLElement | null>(null)
+const memoryContext = ref<MemoryContext | null>(null)
+const memoryExpanded = ref(false)
+
+async function fetchMemory() {
+  try {
+    const res = await fetch(`/api/projects/${encodeURIComponent(props.projectName)}/memory`)
+    if (res.ok) {
+      const data = await res.json()
+      memoryContext.value = data
+    }
+  } catch {
+    // Memory not available yet
+  }
+}
+
+onMounted(() => {
+  fetchMemory()
+})
 
 async function send() {
   const text = input.value.trim()
@@ -131,6 +181,99 @@ function scrollToBottom() {
   text-align: center;
   color: #94a3b8;
   padding: 40px;
+}
+
+.memory-banner {
+  margin: 0 0 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f0fdf4;
+  overflow: hidden;
+}
+
+.memory-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #166534;
+}
+
+.memory-header:hover {
+  background: #dcfce7;
+}
+
+.memory-icon {
+  font-size: 14px;
+}
+
+.memory-title {
+  font-weight: 600;
+}
+
+.memory-stats {
+  margin-left: auto;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.memory-toggle {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.memory-body {
+  padding: 0 12px 10px;
+}
+
+.memory-summary {
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.memory-section {
+  margin-top: 6px;
+}
+
+.memory-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.memory-item {
+  font-size: 12px;
+  color: #475569;
+  padding: 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.severity-critical {
+  color: #dc2626;
+  font-weight: 600;
+  font-size: 10px;
+}
+
+.severity-warning {
+  color: #d97706;
+  font-weight: 600;
+  font-size: 10px;
+}
+
+.severity-info {
+  color: #2563eb;
+  font-weight: 600;
+  font-size: 10px;
 }
 
 .message {

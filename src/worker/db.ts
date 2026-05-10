@@ -293,6 +293,19 @@ export class DatabaseManager {
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_reviews_project ON reviews(project_id)`);
 
+    // Session summaries table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS session_summaries (
+        session_id  TEXT PRIMARY KEY,
+        project_name TEXT NOT NULL,
+        summary     TEXT,
+        key_topics  TEXT,
+        decisions   TEXT,
+        action_items TEXT,
+        created_at  TEXT NOT NULL
+      )
+    `);
+
     this.save();
     logger.info('Database tables initialized');
   }
@@ -649,6 +662,27 @@ export class DatabaseManager {
       [commitHash, projectId]
     );
     this.save();
+  }
+
+  // Session summary operations
+  getRecentSessions(projectId: string, limit: number = 10): any[] {
+    return this.queryAll(
+      'SELECT id, title, created_at FROM sessions WHERE project_id = ? ORDER BY created_at DESC LIMIT ?',
+      [projectId, limit]
+    );
+  }
+
+  saveSessionSummary(sessionId: string, projectName: string, summary: string, keyTopics: string[], decisions: string[], actionItems: string[]): void {
+    this.run(
+      `INSERT OR REPLACE INTO session_summaries (session_id, project_name, summary, key_topics, decisions, action_items, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [sessionId, projectName, summary, JSON.stringify(keyTopics), JSON.stringify(decisions), JSON.stringify(actionItems), new Date().toISOString()]
+    );
+    this.save();
+  }
+
+  getSessionSummary(sessionId: string): any {
+    return this.queryOne('SELECT * FROM session_summaries WHERE session_id = ?', [sessionId]);
   }
 
   // Utility
