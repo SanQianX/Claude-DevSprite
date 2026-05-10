@@ -74,6 +74,33 @@ export interface LinkIndex {
   last_checked: string | null;
 }
 
+export interface Task {
+  id: number;
+  project_id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  estimated: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface Review {
+  id: number;
+  project_id: string;
+  title: string;
+  severity: string;
+  location: string | null;
+  suggestion: string | null;
+  source: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+}
+
 export class DatabaseManager {
   private db!: SqlJsDatabase;
   private dbPath: string;
@@ -199,6 +226,44 @@ export class DatabaseManager {
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_relations_target ON relations(target_doc_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_analysis_log_project ON analysis_log(project_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_link_index_source ON link_index(source_doc_id)`);
+
+    // Tasks table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id  TEXT NOT NULL,
+        title       TEXT NOT NULL,
+        description TEXT,
+        status      TEXT NOT NULL DEFAULT 'backlog',
+        priority    TEXT DEFAULT 'medium',
+        estimated   TEXT,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL,
+        completed_at TEXT,
+        FOREIGN KEY (project_id) REFERENCES projects(id)
+      )
+    `);
+
+    // Reviews table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS reviews (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id  TEXT NOT NULL,
+        title       TEXT NOT NULL,
+        severity    TEXT NOT NULL DEFAULT 'LOW',
+        location    TEXT,
+        suggestion  TEXT,
+        source      TEXT DEFAULT 'manual',
+        status      TEXT NOT NULL DEFAULT 'pending',
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL,
+        resolved_at TEXT,
+        FOREIGN KEY (project_id) REFERENCES projects(id)
+      )
+    `);
+
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_reviews_project ON reviews(project_id)`);
 
     this.save();
     logger.info('Database tables initialized');
@@ -462,6 +527,78 @@ export class DatabaseManager {
 
   deleteLinksForDocument(docId: string): void {
     this.run('DELETE FROM link_index WHERE source_doc_id = ?', [docId]);
+    this.save();
+  }
+
+  // Task operations
+  getTasks(projectId: string): Task[] {
+    return this.queryAll('SELECT * FROM tasks WHERE project_id = ? ORDER BY created_at DESC', [projectId]) as Task[];
+  }
+
+  getTask(id: number): Task | undefined {
+    return this.queryOne('SELECT * FROM tasks WHERE id = ?', [id]) as Task | undefined;
+  }
+
+  createTask(task: Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at'>): Task {
+    const now = new Date().toISOString();
+    this.run(
+      `INSERT INTO tasks (project_id, title, description, status, priority, estimated, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [task.project_id, task.title, task.description, task.status, task.priority, task.estimated, now, now]
+    );
+    const row = this.queryOne('SELECT last_insert_rowid() as id');
+    const id = row ? row.id : 0;
+    this.save();
+    return { ...task, id, created_at: now, updated_at: now, completed_at: null };
+  }
+
+  updateTask(id: number, updates: Partial<Task>): void {
+    const fields = Object.keys(updates).filter(k => k !== 'id');
+    if (fields.length === 0) return;
+    const setClause = fields.map(f => `${f} = ?`).join(', ');
+    const values = fields.map(f => (updates as any)[f]);
+    this.run(`UPDATE tasks SET ${setClause}, updated_at = ? WHERE id = ?`, [...values, new Date().toISOString(), id]);
+    this.save();
+  }
+
+  deleteTask(id: number): void {
+    this.run('DELETE FROM tasks WHERE id = ?', [id]);
+    this.save();
+  }
+
+  // Review operations
+  getReviews(projectId: string): Review[] {
+    return this.queryAll('SELECT * FROM reviews WHERE project_id = ? ORDER BY created_at DESC', [projectId]) as Review[];
+  }
+
+  getReview(id: number): Review | undefined {
+    return this.queryOne('SELECT * FROM reviews WHERE id = ?', [id]) as Review | undefined;
+  }
+
+  createReview(review: Omit<Review, 'id' | 'created_at' | 'updated_at' | 'resolved_at'>): Review {
+    const now = new Date().toISOString();
+    this.run(
+      `INSERT INTO reviews (project_id, title, severity, location, suggestion, source, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [review.project_id, review.title, review.severity, review.location, review.suggestion, review.source, review.status, now, now]
+    );
+    const row = this.queryOne('SELECT last_insert_rowid() as id');
+    const id = row ? row.id : 0;
+    this.save();
+    return { ...review, id, created_at: now, updated_at: now, resolved_at: null };
+  }
+
+  updateReview(id: number, updates: Partial<Review>): void {
+    const fields = Object.keys(updates).filter(k => k !== 'id');
+    if (fields.length === 0) return;
+    const setClause = fields.map(f => `${f} = ?`).join(', ');
+    const values = fields.map(f => (updates as any)[f]);
+    this.run(`UPDATE reviews SET ${setClause}, updated_at = ? WHERE id = ?`, [...values, new Date().toISOString(), id]);
+    this.save();
+  }
+
+  deleteReview(id: number): void {
+    this.run('DELETE FROM reviews WHERE id = ?', [id]);
     this.save();
   }
 

@@ -26,15 +26,15 @@
 
 ## Phase 2 — Dashboard 模式
 
-- [ ] 2.1 后端数据模型：tasks + reviews SQLite 表
-- [ ] 2.2 后端 API：tasks CRUD + reviews CRUD 端点
-- [ ] 2.3 前端 store：dashboard store（tasks + reviews 状态管理）
-- [ ] 2.4 ProjectInfoBar.vue 项目信息栏（名称/路径/仓库类型/文档数/最后更新）
-- [ ] 2.5 TaskList.vue + TaskCard.vue 任务列表组件（CRUD + 状态流转）
-- [ ] 2.6 AddTaskDialog.vue 新建任务对话框
-- [ ] 2.7 ReviewQueue.vue + ReviewItem.vue 审查队列（列表 + 筛选）
-- [ ] 2.8 ReviewFilter.vue 筛选组件
-- [ ] 2.9 构建验证 + 回归测试
+- [x] 2.1 后端数据模型：tasks + reviews SQLite 表
+- [x] 2.2 后端 API：tasks CRUD + reviews CRUD 端点
+- [x] 2.3 前端 store：dashboard store（tasks + reviews 状态管理）
+- [x] 2.4 ProjectInfoBar.vue 项目信息栏（名称/路径/仓库类型/文档数/最后更新）
+- [x] 2.5 TaskList.vue + TaskCard.vue 任务列表组件（CRUD + 状态流转）
+- [x] 2.6 AddTaskDialog.vue 新建任务对话框
+- [x] 2.7 ReviewQueue.vue + ReviewItem.vue 审查队列（列表 + 筛选）
+- [x] 2.8 ReviewFilter.vue 筛选组件
+- [x] 2.9 构建验证 + 回归测试
 
 ## Phase 3 — Workspace 面板
 

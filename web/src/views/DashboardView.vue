@@ -49,10 +49,10 @@
                 </div>
                 <template v-if="group.expanded">
                   <div v-for="task in group.tasks" :key="task.id" class="task-item">
-                    <div class="task-dot" :class="'dot-' + task.statusColor"></div>
+                    <div class="task-dot" :class="'dot-' + getStatusColor(task.status)"></div>
                     <div class="task-info">
                       <div class="task-title">{{ task.title }}</div>
-                      <div class="task-meta">{{ task.meta }}</div>
+                      <div class="task-meta">{{ getTaskMeta(task) }}</div>
                     </div>
                   </div>
                 </template>
@@ -145,10 +145,14 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
+import { useDashboardStore } from '@/stores/dashboard'
+import type { Task, Review } from '@/api/dashboard'
 
 const props = defineProps<{
   projectName: string
 }>()
+
+const dashboardStore = useDashboardStore()
 
 const showAddTask = ref(false)
 const newTaskTitle = ref('')
@@ -163,24 +167,8 @@ const stats = reactive({
   lastAnalysis: '--',
 })
 
-interface Task {
-  id: string
-  title: string
-  status: 'progress' | 'done' | 'backlog'
-  statusColor: string
-  meta: string
-}
-
-const tasks = ref<Task[]>([
-  { id: '1', title: 'WebSocket 实时聊天优化', status: 'progress', statusColor: 'blue', meta: '优先级: 高 | 预计: 3天' },
-  { id: '2', title: '多面板工作台布局', status: 'progress', statusColor: 'blue', meta: '优先级: 高 | 预计: 5天' },
-  { id: '3', title: 'AI 自动代码审查', status: 'progress', statusColor: 'blue', meta: '优先级: 中 | 预计: 2天' },
-  { id: '4', title: 'Dashboard 重新设计', status: 'done', statusColor: 'green', meta: '完成于: May 10' },
-  { id: '5', title: '文件系统浏览器', status: 'done', statusColor: 'green', meta: '完成于: May 10' },
-  { id: '6', title: '首页重构', status: 'done', statusColor: 'green', meta: '完成于: May 11' },
-  { id: '7', title: 'Doc↔Code 关联', status: 'backlog', statusColor: 'gray', meta: '待开发' },
-  { id: '8', title: '开发记忆功能', status: 'backlog', statusColor: 'gray', meta: '待开发' },
-])
+// Adapt API tasks to display format
+const tasks = computed(() => dashboardStore.tasks)
 
 const taskGroups = reactive([
   {
@@ -207,65 +195,51 @@ const completionPercent = computed(() =>
   tasks.value.length > 0 ? Math.round((completedCount.value / tasks.value.length) * 100) : 0
 )
 
-interface Review {
-  id: string
-  severity: string
-  title: string
-  location: string
-  suggestion: string
-  time: string
-  status: string
-}
-
-const reviews = ref<Review[]>([
-  {
-    id: 'r1', severity: 'HIGH', title: '未处理的 API 密钥异常可能导致进程崩溃',
-    location: 'src/analyzer/aiProvider.ts:87',
-    suggestion: '添加 try-catch 并实现降级到 CLI 模式',
-    time: '2026-05-10 22:30', status: 'pending',
-  },
-  {
-    id: 'r2', severity: 'MED', title: 'buildFileTree 递归深度无限制',
-    location: 'src/worker/routes/files.ts:142',
-    suggestion: '添加 maxDepth 参数限制递归层级',
-    time: '2026-05-10 22:30', status: 'pending',
-  },
-  {
-    id: 'r3', severity: 'LOW', title: 'WebSocket 心跳间隔硬编码',
-    location: 'src/worker/wsHandler.ts:23',
-    suggestion: '从 config.ts 读取 heartbeatInterval',
-    time: '2026-05-10 21:00', status: 'pending',
-  },
-])
+const reviews = computed(() => dashboardStore.reviews)
 
 const reviewStats = computed(() => ({
   pending: reviews.value.filter(r => r.status === 'pending').length,
-  approved: 12,
-  ignored: 2,
+  approved: reviews.value.filter(r => r.status === 'approved').length,
+  ignored: reviews.value.filter(r => r.status === 'ignored').length,
 }))
 
-function approveReview(id: string) {
-  reviews.value = reviews.value.filter(r => r.id !== id)
+function approveReview(id: number) {
+  dashboardStore.approveReview(props.projectName, id)
 }
 
-function ignoreReview(id: string) {
-  reviews.value = reviews.value.filter(r => r.id !== id)
+function ignoreReview(id: number) {
+  dashboardStore.ignoreReview(props.projectName, id)
 }
 
-function addTask() {
+async function addTask() {
   if (!newTaskTitle.value.trim()) return
-  tasks.value.push({
-    id: Date.now().toString(),
+  await dashboardStore.addTask(props.projectName, {
     title: newTaskTitle.value,
     status: 'backlog',
-    statusColor: 'gray',
-    meta: '待开发',
+    priority: 'medium',
   })
   newTaskTitle.value = ''
   showAddTask.value = false
 }
 
+function getStatusColor(status: string): string {
+  if (status === 'done') return 'green'
+  if (status === 'progress') return 'blue'
+  return 'gray'
+}
+
+function getTaskMeta(task: Task): string {
+  if (task.status === 'done' && task.completed_at) {
+    return `完成于: ${new Date(task.completed_at).toLocaleDateString()}`
+  }
+  const parts: string[] = []
+  if (task.priority) parts.push(`优先级: ${task.priority}`)
+  if (task.estimated) parts.push(`预计: ${task.estimated}`)
+  return parts.join(' | ') || '待开发'
+}
+
 onMounted(async () => {
+  // Fetch project details
   try {
     const res = await fetch(`/api/projects/${encodeURIComponent(props.projectName)}`)
     const data = await res.json()
@@ -274,6 +248,9 @@ onMounted(async () => {
       stats.docCount = data.documentCount || 0
     }
   } catch { /* ignore */ }
+
+  // Fetch tasks and reviews from API
+  await dashboardStore.fetchAll(props.projectName)
 })
 </script>
 
