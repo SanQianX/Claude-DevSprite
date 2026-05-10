@@ -16,6 +16,7 @@ import { registerLogRoutes } from './logs';
 import { registerTeamRoutes } from './teams';
 import { registerTokenRoutes } from './tokens';
 import { registerDashboardRoutes } from './dashboard';
+import { registerSourceTreeRoutes } from './sourceTree';
 
 export function registerRoutes(app: Express): void {
   // Register route modules
@@ -31,4 +32,5 @@ export function registerRoutes(app: Express): void {
   registerTeamRoutes(app);
   registerTokenRoutes(app);
   registerDashboardRoutes(app);
+  registerSourceTreeRoutes(app);
 }

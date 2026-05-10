@@ -35,13 +35,11 @@
         class="panel"
         :style="{ width: panelWidths.doc + 'px' }"
       >
-        <div class="panel-header">
-          <div class="panel-title">📄 文档</div>
-          <button class="panel-close" @click="togglePanel('doc')">✕</button>
-        </div>
-        <div class="panel-content">
-          <p class="panel-placeholder">选择文档以查看内容</p>
-        </div>
+        <DocPanel
+          :project-name="projectName"
+          @close="togglePanel('doc')"
+          @doc-select="onDocSelect"
+        />
       </div>
 
       <!-- Doc/Code Divider -->
@@ -57,13 +55,11 @@
         class="panel"
         :style="{ width: panelWidths.code + 'px' }"
       >
-        <div class="panel-header">
-          <div class="panel-title">📁 源码</div>
-          <button class="panel-close" @click="togglePanel('code')">✕</button>
-        </div>
-        <div class="panel-content">
-          <p class="panel-placeholder">选择文件以查看源码</p>
-        </div>
+        <CodePanel
+          :project-name="projectName"
+          @close="togglePanel('code')"
+          @file-select="onFileSelect"
+        />
       </div>
 
       <!-- Code/Chat Divider -->
@@ -78,26 +74,10 @@
         v-if="panels.chat"
         class="panel panel-chat"
       >
-        <div class="panel-header">
-          <div class="panel-title">💬 开发对话</div>
-          <button class="panel-close" @click="togglePanel('chat')">✕</button>
-        </div>
-        <div class="panel-content chat-content">
-          <div class="chat-messages">
-            <div class="chat-empty">开始新的对话...</div>
-          </div>
-          <div class="chat-input-area">
-            <div class="chat-input-wrapper">
-              <input
-                v-model="chatInput"
-                class="chat-input"
-                placeholder="输入消息..."
-                @keydown.enter="sendMessage"
-              />
-              <button class="chat-send" @click="sendMessage">发送</button>
-            </div>
-          </div>
-        </div>
+        <ChatPanel
+          :project-name="projectName"
+          @close="togglePanel('chat')"
+        />
       </div>
     </div>
 
@@ -112,6 +92,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
+import DocPanel from '@/components/workspace/DocPanel.vue'
+import CodePanel from '@/components/workspace/CodePanel.vue'
+import ChatPanel from '@/components/workspace/ChatPanel.vue'
 
 const props = defineProps<{
   projectName: string
@@ -128,7 +111,6 @@ const panelWidths = reactive({
   code: 400,
 })
 
-const chatInput = ref('')
 const panelsContainer = ref<HTMLElement | null>(null)
 
 const activePanelCount = computed(() =>
@@ -139,9 +121,14 @@ function togglePanel(name: 'doc' | 'code' | 'chat') {
   panels[name] = !panels[name]
 }
 
-function sendMessage() {
-  if (!chatInput.value.trim()) return
-  chatInput.value = ''
+function onDocSelect(path: string) {
+  // Future: sync with URL params
+  console.log('Doc selected:', path)
+}
+
+function onFileSelect(path: string) {
+  // Future: sync with URL params
+  console.log('File selected:', path)
 }
 
 let resizeState: { type: string; startX: number; startWidths: Record<string, number> } | null = null
@@ -242,54 +229,6 @@ function stopResize() {
   flex: 1;
 }
 
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
-  flex-shrink: 0;
-}
-
-.panel-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.panel-close {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  color: #94a3b8;
-  cursor: pointer;
-  background: none;
-  border: none;
-}
-
-.panel-close:hover {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.panel-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-.panel-placeholder {
-  color: #94a3b8;
-  font-size: 14px;
-  text-align: center;
-  padding: 40px 20px;
-}
-
 .panel-divider {
   width: 4px;
   background: #e2e8f0;
@@ -300,62 +239,6 @@ function stopResize() {
 
 .panel-divider:hover {
   background: #3b82f6;
-}
-
-.chat-content {
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-}
-
-.chat-empty {
-  text-align: center;
-  color: #94a3b8;
-  padding: 40px;
-}
-
-.chat-input-area {
-  padding: 16px;
-  border-top: 1px solid #e2e8f0;
-}
-
-.chat-input-wrapper {
-  display: flex;
-  gap: 10px;
-}
-
-.chat-input {
-  flex: 1;
-  padding: 10px 16px;
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
-  font-size: 14px;
-}
-
-.chat-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-}
-
-.chat-send {
-  padding: 10px 20px;
-  background: #2563eb;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.chat-send:hover {
-  background: #1d4ed8;
 }
 
 .status-bar {

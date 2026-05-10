@@ -38,13 +38,13 @@
 
 ## Phase 3 — Workspace 面板
 
-- [ ] 3.1 DocPanel.vue 封装（复用 DocumentView）
-- [ ] 3.2 CodePanel.vue 封装（复用 SourceViewer + 文件树浏览）
-- [ ] 3.3 ChatPanel.vue 精简版（复用 DevChatView 核心组件）
-- [ ] 3.4 FileTreeSidebar.vue 双 Tab（知识库/源码）
-- [ ] 3.5 后端 source-tree API 端点（返回项目源码文件树）
-- [ ] 3.6 面板拖拽调整大小
-- [ ] 3.7 构建验证 + 回归测试
+- [x] 3.1 DocPanel.vue 封装（复用 DocumentView）
+- [x] 3.2 CodePanel.vue 封装（复用 SourceViewer + 文件树浏览）
+- [x] 3.3 ChatPanel.vue 精简版（复用 DevChatView 核心组件）
+- [x] 3.4 FileTreeSidebar.vue 双 Tab（知识库/源码）
+- [x] 3.5 后端 source-tree API 端点（返回项目源码文件树）
+- [x] 3.6 面板拖拽调整大小
+- [x] 3.7 构建验证 + 回归测试
 
 ## Phase 4 — Doc↔Code 关联
 
