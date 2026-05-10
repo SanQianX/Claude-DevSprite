@@ -1,7 +1,7 @@
 export default {
   common: {
     appName: 'DevSprite',
-    search: 'Search project...',
+    search: 'Search docs, code, projects...',
     settings: 'System Settings',
     theme: 'Toggle Theme',
     language: 'Language',

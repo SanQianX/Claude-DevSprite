@@ -1,7 +1,7 @@
 export default {
   common: {
     appName: 'DevSprite',
-    search: '搜索项目...',
+    search: '搜索文档、代码、项目...',
     settings: '系统设置',
     theme: '切换主题',
     language: '语言',

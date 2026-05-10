@@ -14,6 +14,7 @@ import { registerConfigRoutes } from './config';
 import { registerInternalRoutes } from './internal';
 import { registerLogRoutes } from './logs';
 import { registerTeamRoutes } from './teams';
+import { registerTokenRoutes } from './tokens';
 
 export function registerRoutes(app: Express): void {
   // Register route modules
@@ -27,4 +28,5 @@ export function registerRoutes(app: Express): void {
   registerInternalRoutes(app);
   registerLogRoutes(app);
   registerTeamRoutes(app);
+  registerTokenRoutes(app);
 }
