@@ -1,11 +1,29 @@
-import { apiClient } from './client'
+import { apiClient, unwrap } from './client'
 import type {
   Project,
   ProjectDetail,
   FileTreeResponse,
-  DocumentData,
-  ApiResponse
+  DocumentData
 } from '@/types'
+
+export interface FilesystemEntry {
+  name: string
+  path: string
+  isDirectory: boolean
+}
+
+export interface BrowseResponse {
+  currentPath: string
+  parentPath: string | null
+  entries: FilesystemEntry[]
+}
+
+export interface DriveInfo {
+  letter: string
+  label: string
+  free: number
+  total: number
+}
 
 export const projectsApi = {
   /**
@@ -13,11 +31,7 @@ export const projectsApi = {
    * Returns: { projects: Project[] }
    */
   async getProjects(): Promise<{ projects: Project[] }> {
-    const response = await apiClient.get<{ projects: Project[] }>('/projects')
-    if (response.success && response.data) {
-      return response.data
-    }
-    throw new Error(response.error || 'Failed to fetch projects')
+    return unwrap(apiClient.get<{ projects: Project[] }>('/projects'))
   },
 
   /**
@@ -25,11 +39,7 @@ export const projectsApi = {
    * Returns: { name, path, knowledgePath, description, lastUpdated, documentCount }
    */
   async getProjectDetail(projectName: string): Promise<ProjectDetail> {
-    const response = await apiClient.get<ProjectDetail>(`/projects/${projectName}`)
-    if (response.success && response.data) {
-      return response.data
-    }
-    throw new Error(response.error || 'Failed to fetch project detail')
+    return unwrap(apiClient.get<ProjectDetail>(`/projects/${projectName}`))
   },
 
   /**
@@ -37,13 +47,9 @@ export const projectsApi = {
    * Returns: { projectName, tree: FileTreeNode }
    */
   async getProjectTree(projectName: string): Promise<FileTreeResponse> {
-    const response = await apiClient.get<FileTreeResponse>(
+    return unwrap(apiClient.get<FileTreeResponse>(
       `/projects/${projectName}/tree`
-    )
-    if (response.success && response.data) {
-      return response.data
-    }
-    throw new Error(response.error || 'Failed to fetch file tree')
+    ))
   },
 
   /**
@@ -52,11 +58,7 @@ export const projectsApi = {
    * Returns: Project
    */
   async addProject(projectPath: string): Promise<Project> {
-    const response = await apiClient.post<Project>('/projects/add', { path: projectPath })
-    if (response.success && response.data) {
-      return response.data
-    }
-    throw new Error(response.error || 'Failed to add project')
+    return unwrap(apiClient.post<Project>('/projects/add', { path: projectPath }))
   },
 
   /**
@@ -64,10 +66,7 @@ export const projectsApi = {
    * Remove a project from the system (does NOT delete local files)
    */
   async deleteProject(projectName: string): Promise<void> {
-    const response = await apiClient.delete(`/projects/${projectName}`)
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to delete project')
-    }
+    await unwrap(apiClient.delete(`/projects/${encodeURIComponent(projectName)}`))
   },
 
   /**
@@ -78,12 +77,28 @@ export const projectsApi = {
     projectName: string,
     path: string
   ): Promise<DocumentData> {
-    const response = await apiClient.get<DocumentData>(
+    return unwrap(apiClient.get<DocumentData>(
       `/projects/${projectName}/file?path=${encodeURIComponent(path)}`
-    )
-    if (response.success && response.data) {
-      return response.data
-    }
-    throw new Error(response.error || 'Failed to fetch file content')
+    ))
+  },
+
+  /**
+   * GET /api/filesystem/drives
+   * Get list of system disk drives
+   * Returns: { drives: [{ letter, label, free, total }] }
+   */
+  async getDrives(): Promise<DriveInfo[]> {
+    const data = await unwrap(apiClient.get<{ drives: DriveInfo[] }>('/filesystem/drives'))
+    return data.drives
+  },
+
+  /**
+   * GET /api/filesystem/browse?path=...
+   * Browse local filesystem directories
+   * Returns: { currentPath, parentPath, entries: [{ name, path, isDirectory }] }
+   */
+  async browseFilesystem(dirPath?: string): Promise<BrowseResponse> {
+    const query = dirPath ? `?path=${encodeURIComponent(dirPath)}` : ''
+    return unwrap(apiClient.get<BrowseResponse>(`/filesystem/browse${query}`))
   }
 }

@@ -3,7 +3,7 @@
  * Handles team configuration and chat API calls
  */
 
-const API_BASE = '/api';
+import { apiClient, unwrap } from './client';
 
 // Types
 export interface TeamConfig {
@@ -33,110 +33,115 @@ export interface ChatEvent {
   metadata?: Record<string, any>;
 }
 
-// Helper function for API calls
-async function apiCall<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    ...options,
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'API call failed');
-  }
-
-  return response.json();
-}
-
 // Team API
 export const teamsApi = {
   /**
    * Get all team configurations
    */
   async getAll(): Promise<TeamConfig[]> {
-    return apiCall('/teams');
+    return unwrap(apiClient.get<TeamConfig[]>('/teams'));
   },
 
   /**
    * Get single team configuration
    */
   async get(name: string): Promise<TeamConfig> {
-    return apiCall(`/teams/${name}`);
+    return unwrap(apiClient.get<TeamConfig>(`/teams/${name}`));
   },
 
   /**
    * Update team configuration
    */
   async update(name: string, config: Partial<TeamConfig>): Promise<TeamConfig> {
-    return apiCall(`/teams/${name}`, {
-      method: 'PUT',
-      body: JSON.stringify(config),
-    });
+    return unwrap(apiClient.put<TeamConfig>(`/teams/${name}`, config as Record<string, unknown>));
   },
 
   /**
    * Get team status
    */
   async getStatus(name: string): Promise<TeamStatus> {
-    return apiCall(`/teams/${name}/status`);
+    return unwrap(apiClient.get<TeamStatus>(`/teams/${name}/status`));
   },
 
   /**
    * Get all team statuses
    */
   async getAllStatuses(): Promise<TeamStatus[]> {
-    return apiCall('/teams/status/all');
+    return unwrap(apiClient.get<TeamStatus[]>('/teams/status/all'));
   },
 
   /**
    * Test team connectivity
    */
   async test(name: string): Promise<{ success: boolean; message: string }> {
-    return apiCall(`/teams/${name}/test`, {
-      method: 'POST',
-    });
+    return unwrap(apiClient.post<{ success: boolean; message: string }>(`/teams/${name}/test`, {}));
   },
 
   /**
    * Abort team execution
    */
   async abort(name: string): Promise<void> {
-    await apiCall(`/teams/${name}/abort`, {
-      method: 'POST',
-    });
+    await unwrap(apiClient.post<void>(`/teams/${name}/abort`, {}));
   },
 
   /**
    * Abort all teams
    */
   async abortAll(): Promise<void> {
-    await apiCall('/teams/abort-all', {
-      method: 'POST',
-    });
+    await unwrap(apiClient.post<void>('/teams/abort-all', {}));
   },
 };
 
-// Chat API
+// Chat API (legacy REST - kept for backward compatibility, WebSocket is primary)
 export const chatApi = {
   /**
-   * Create SSE stream for real-time updates
+   * Send chat message via REST
    */
-  createStream(): EventSource {
-    return new EventSource(`${API_BASE}/chat/stream`);
+  async send(message: string): Promise<void> {
+    await apiClient.post('/chat/send', { message });
+  },
+};
+
+// Re-export canonical session types from shared type definitions
+export type { Session, SessionMessage } from '../types/session';
+import type { Session, SessionMessage } from '../types/session';
+
+// Session API (REST endpoints)
+export const sessionsApi = {
+  /**
+   * List sessions for a project
+   */
+  async list(projectPath?: string): Promise<Session[]> {
+    const params = projectPath ? `?projectPath=${encodeURIComponent(projectPath)}` : '';
+    return unwrap(apiClient.get<Session[]>(`/sessions${params}`));
   },
 
   /**
-   * Send chat message
+   * Get session by ID
    */
-  async send(message: string): Promise<Response> {
-    return fetch(`${API_BASE}/chat/send`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ message }),
-    });
+  async get(sessionId: string): Promise<Session> {
+    return unwrap(apiClient.get<Session>(`/sessions/${sessionId}`));
+  },
+
+  /**
+   * Get messages for a session
+   */
+  async getMessages(sessionId: string, afterSeq?: number): Promise<SessionMessage[]> {
+    const params = afterSeq !== undefined ? `?afterSeq=${afterSeq}` : '';
+    return unwrap(apiClient.get<SessionMessage[]>(`/sessions/${sessionId}/messages${params}`));
+  },
+
+  /**
+   * Update session (title, etc.)
+   */
+  async update(sessionId: string, data: Partial<Session>): Promise<Session> {
+    return unwrap(apiClient.put<Session>(`/sessions/${sessionId}`, data as Record<string, unknown>));
+  },
+
+  /**
+   * Archive (soft delete) a session
+   */
+  async archive(sessionId: string): Promise<void> {
+    await unwrap(apiClient.delete<void>(`/sessions/${sessionId}`));
   },
 };

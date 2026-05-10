@@ -1,4 +1,4 @@
-import { apiClient } from './client'
+import { apiClient, unwrap } from './client'
 
 export interface LogsResponse {
   logs: string
@@ -13,10 +13,6 @@ export const logsApi = {
     if (level && level !== 'ALL') {
       params.set('level', level)
     }
-    const response = await apiClient.get(`/logs?${params}`)
-    if (response.success && response.data) {
-      return response.data as LogsResponse
-    }
-    throw new Error(response.error || 'Failed to fetch logs')
+    return unwrap(apiClient.get<LogsResponse>(`/logs?${params}`))
   },
 }

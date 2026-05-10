@@ -1,12 +1,14 @@
 /**
  * Express HTTP Server
- * Provides API endpoints for Web Dashboard
+ * Provides API endpoints for Web Dashboard and WebSocket for real-time chat
  */
 
 import express from 'express';
+import http from 'http';
 import { join, dirname } from 'path';
 import { config } from '../config';
 import { registerRoutes } from './routes/index';
+import { registerSessionRoutes, setSessionManager } from './routes/sessions';
 import { errorHandler } from './middleware/errorHandler';
 import { cors } from './middleware/cors';
 import { logger } from '../utils/logger';
@@ -17,6 +19,8 @@ import { getProjectDiscoveryService } from '../services/projectDiscovery';
 import { registerProjectDetector } from './detectorRegistry';
 import { sseBroadcaster } from './sseBroadcaster';
 import { analysisTracker } from './analysisTracker';
+import { WsServer } from './wsServer';
+import { SessionManager } from './sessionManager';
 
 let analyzer: Analyzer | null = null;
 
@@ -65,6 +69,11 @@ export async function startServer(): Promise<void> {
   // API routes
   registerRoutes(app);
 
+  // Initialize session manager and WebSocket server
+  const sessionManager = new SessionManager();
+  setSessionManager(sessionManager);
+  registerSessionRoutes(app);
+
   // Initialize analyzer
   analyzer = new Analyzer();
 
@@ -107,9 +116,27 @@ export async function startServer(): Promise<void> {
   // Error handling
   app.use(errorHandler);
 
+  // Create HTTP server (needed for WebSocket attachment)
+  const httpServer = http.createServer(app);
+
+  // Initialize and attach WebSocket server
+  const wsServer = new WsServer(sessionManager);
+  wsServer.attach(httpServer);
+
   // Start listening
-  app.listen(config.server.port, () => {
+  httpServer.listen(config.server.port, () => {
     logger.info(`Claude-DevSprite Worker listening on http://localhost:${config.server.port}`);
+    logger.info(`WebSocket server available at ws://localhost:${config.server.port}/ws`);
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    logger.info('SIGTERM received, shutting down gracefully...');
+    wsServer.shutdown();
+    httpServer.close(() => {
+      logger.info('Server shut down');
+      process.exit(0);
+    });
   });
 }
 

@@ -1,0 +1,305 @@
+# Claude-DevSprite 聊天系统重构计划
+
+## 状态：待用户确认
+
+---
+
+## 一、需求概述
+
+将当前基于 SSE 的聊天系统重构为 WebSocket 双向通信 + 会话管理 + 工具调用展示。
+
+### 1.1 核心变更
+1. **SSE → WebSocket** - 替换单向 SSE 为双向 WebSocket 通信
+2. **会话管理** - 支持创建、列表、切换、持久化聊天会话
+3. **工具调用展示** - 展示 Agent 工具调用（v1 不含阻塞审批）
+4. **终端风格 UI** - 重新设计消息显示样式
+
+### 1.2 v1 范围限制（基于批判结论）
+- **移除**: Token 认证（localhost 本地工具）
+- **降级**: 工具审批 → 工具调用展示（无阻塞审批）
+- **复用**: 现有 chat/ 组件，不新建 gateway/ 目录
+- **简化**: 使用 JSON 文件持久化（与 fileProtocol 风格一致）
+
+---
+
+## 二、技术架构
+
+### 2.1 模块划分
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Backend (Node.js + TypeScript)             │
+├─────────────────────────────────────────────────────────────┤
+│  src/worker/ws/                                              │
+│  ├── WebSocketGateway.ts    - WS 服务器 + 连接管理           │
+│  ├── MessageRouter.ts       - 消息路由 + 处理器注册           │
+│  ├── SessionManager.ts      - 会话 CRUD + JSON 持久化        │
+│  ├── ToolCallTracker.ts     - 工具调用记录和展示              │
+│  └── types.ts               - WS 消息类型定义                │
+│                                                              │
+│  src/worker/routes/                                          │
+│  └── sessions.ts            - 会话 REST API                  │
+│                                                              │
+│  修改文件:                                                   │
+│  ├── server.ts              - 集成 WebSocket 服务器           │
+│  └── routes/teams.ts        - chat.send 改走 WebSocket       │
+└────────────────────────┬────────────────────────────────────┘
+                         │ WebSocket (ws://localhost:38888/ws)
+┌────────────────────────┴────────────────────────────────────┐
+│                      Frontend (Vue 3)                         │
+├─────────────────────────────────────────────────────────────┤
+│  web/src/stores/                                              │
+│  ├── gateway.ts             - WebSocket 连接 + 消息收发       │
+│  └── sessions.ts            - 会话状态 + CRUD                 │
+│                                                              │
+│  web/src/components/chat/ (复用现有)                          │
+│  ├── ChatInput.vue          - 输入组件（增强：会话上下文）     │
+│  ├── ChatMessage.vue        - 消息显示（增强：工具调用卡片）   │
+│  ├── ChatMessageList.vue    - 消息列表（增强：会话切换）       │
+│  └── ToolCallCard.vue       - 新增：工具调用展示卡片           │
+│                                                              │
+│  web/src/components/session/ (新增)                           │
+│  ├── SessionSidebar.vue     - 会话侧边栏                     │
+│  └── NewSessionDialog.vue   - 创建会话对话框                  │
+│                                                              │
+│  修改文件:                                                   │
+│  ├── views/DevChatView.vue  - 集成会话侧边栏                  │
+│  ├── api/teams.ts           - WebSocket 客户端                │
+│  └── router/index.ts        - 路由不变（/chat）               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 数据模型
+
+#### Session（JSON 文件持久化）
+```typescript
+interface Session {
+  id: string;                    // UUID
+  projectPath: string;           // 限定到项目
+  title: string;                 // 自动生成或用户设置
+  createdAt: number;             // Unix timestamp
+  updatedAt: number;             // Unix timestamp
+  status: 'active' | 'archived' | 'deleted' | 'failed';
+  messageCount: number;
+}
+```
+
+#### SessionMessage
+```typescript
+interface SessionMessage {
+  id: string;                    // UUID
+  sessionId: string;             // FK to Session
+  sequenceId: number;            // 每个会话单调递增 (SQLite AUTOINCREMENT)
+  type: 'user' | 'agent' | 'tool_call' | 'tool_result' | 'system' | 'error';
+  team?: TeamName;               // 'lead' | 'dev' | 'test'
+  content: string;
+  timestamp: number;
+  metadata?: {
+    toolName?: string;
+    toolArgs?: Record<string, any>;
+    toolCallId?: string;
+    tokenUsage?: { prompt: number; completion: number };
+  };
+}
+```
+
+#### ChatEvent → SessionMessage 映射
+```typescript
+function mapChatEventToMessage(event: ChatEvent, sessionId: string, seq: number): SessionMessage {
+  return {
+    id: generateUUID(),
+    sessionId,
+    sequenceId: seq,
+    type: mapEventType(event.type),
+    team: event.team,
+    content: event.content,
+    timestamp: Date.now(),
+    metadata: event.metadata,
+  };
+}
+```
+
+### 2.3 WebSocket 协议
+
+#### Client → Server
+```typescript
+{ type: 'session.create', projectPath: string, title?: string }
+{ type: 'session.activate', sessionId: string }  // per-connection 级别
+{ type: 'chat.send', sessionId: string, content: string }
+{ type: 'session.sync', sessionId: string, lastSequenceId: number }
+{ type: 'ping' }
+```
+
+#### Server → Client
+```typescript
+{ type: 'session.created', session: Session }
+{ type: 'session.list', sessions: Session[] }
+{ type: 'chat.message', sessionId: string, message: SessionMessage }
+{ type: 'tool.call', sessionId: string, message: SessionMessage }  // 工具调用展示
+{ type: 'session.sync.result', sessionId: string, messages: SessionMessage[] }
+{ type: 'error', code: string, message: string }
+{ type: 'pong' }
+```
+
+### 2.4 REST API
+```
+GET    /api/sessions                    - 列出会话
+GET    /api/sessions/:id                - 获取会话详情
+GET    /api/sessions/:id/messages       - 消息历史（分页）
+DELETE /api/sessions/:id                - 归档会话
+PATCH  /api/sessions/:id                - 更新会话
+```
+
+---
+
+## 三、任务分解与并行分配
+
+### Phase 1: 基础设施（第1周）— 开发 Agent 主导
+
+**任务 1.1: WebSocket 服务器 + 会话管理（合并 A1+A2）**
+- 安装 `ws` + `@types/ws` 依赖
+- 创建 `src/worker/ws/WebSocketGateway.ts`
+- 创建 `src/worker/ws/MessageRouter.ts`
+- 创建 `src/worker/ws/SessionManager.ts`（JSON 文件持久化）
+- 创建 `src/worker/ws/types.ts`
+- 修改 `src/worker/server.ts` 集成 WebSocket
+- 创建 `src/worker/routes/sessions.ts` REST API
+
+**任务 1.2: AsyncGenerator → WebSocket 桥接原型验证（提前 A4）**
+- 修改 `src/teams/teamManager.ts` 输出 WebSocket 事件
+- 验证 `handleChat()` AsyncGenerator 到 WS 推送的可行性
+- 这是最关键的风险点，必须第1周验证
+
+**任务 1.3: 前端 Gateway Store**
+- 创建 `web/src/stores/gateway.ts`（WebSocket 连接管理）
+- 创建 `web/src/stores/sessions.ts`（会话状态）
+- 实现重连逻辑（指数退避）
+- 实现消息同步
+
+**任务 1.4: 后端单元测试**
+- WebSocket 连接测试
+- 会话 CRUD 测试
+- 消息排序测试
+
+### Phase 2: 核心功能（第2周）— 开发 + 设计 Agent 并行
+
+**任务 2.1: 工具调用展示（降级版）**
+- 创建 `src/worker/ws/ToolCallTracker.ts`
+- 修改 `teamExecutor.ts` 输出工具调用事件
+- 前端创建 `web/src/components/chat/ToolCallCard.vue`
+
+**任务 2.2: 会话管理 UI**
+- 创建 `web/src/components/session/SessionSidebar.vue`
+- 创建 `web/src/components/session/NewSessionDialog.vue`
+- 修改 `DevChatView.vue` 集成侧边栏
+
+**任务 2.3: 消息组件增强**
+- 修改 `ChatMessage.vue` 支持工具调用卡片
+- 修改 `ChatMessageList.vue` 支持会话切换
+
+**任务 2.4: 前端单元测试**
+- Gateway Store 测试
+- Sessions Store 测试
+- ToolCallCard 组件测试
+
+### Phase 3: 集成与优化（第3周）— 全团队
+
+**任务 3.1: 完整聊天流程集成**
+- 用户消息 → WebSocket → TeamManager → Agent 响应 → WebSocket → 前端显示
+- 会话消息持久化和历史加载
+
+**任务 3.2: 集成测试**
+- 完整聊天流程测试
+- 工具调用展示测试
+- 会话切换测试
+- 重连同步测试
+
+**任务 3.3: 错误处理**
+- WebSocket 断开恢复
+- Agent 进程崩溃处理
+- 消息大小超限处理
+
+### Phase 4: 测试与文档（第4周）— 测试 Agent 主导
+
+**任务 4.1: E2E 测试**
+- 完整用户旅程测试
+- 并发会话测试
+- 性能基准测试
+
+**任务 4.2: 文档更新**
+- 更新 ARCHITECTURE.md
+- 更新 API 文档
+
+---
+
+## 四、文件修改清单
+
+### 新增文件
+| 文件 | 职责 | 负责 |
+|------|------|------|
+| `src/worker/ws/WebSocketGateway.ts` | WS 服务器 | Dev |
+| `src/worker/ws/MessageRouter.ts` | 消息路由 | Dev |
+| `src/worker/ws/SessionManager.ts` | 会话管理 | Dev |
+| `src/worker/ws/ToolCallTracker.ts` | 工具调用跟踪 | Dev |
+| `src/worker/ws/types.ts` | WS 类型定义 | Design |
+| `src/worker/routes/sessions.ts` | 会话 REST API | Dev |
+| `web/src/stores/gateway.ts` | WS 连接 Store | Dev |
+| `web/src/stores/sessions.ts` | 会话 Store | Dev |
+| `web/src/components/chat/ToolCallCard.vue` | 工具调用卡片 | Design |
+| `web/src/components/session/SessionSidebar.vue` | 会话侧边栏 | Design |
+| `web/src/components/session/NewSessionDialog.vue` | 创建会话 | Design |
+
+### 修改文件
+| 文件 | 变更 | 负责 |
+|------|------|------|
+| `src/worker/server.ts` | 集成 WebSocket | Dev |
+| `src/teams/teamManager.ts` | 输出 WS 事件 | Dev |
+| `web/src/stores/chat.ts` | SSE → WebSocket | Dev |
+| `web/src/views/DevChatView.vue` | 集成侧边栏 | Design |
+| `web/src/components/chat/ChatMessage.vue` | 工具调用卡片 | Design |
+| `web/src/api/teams.ts` | WebSocket 客户端 | Dev |
+
+---
+
+## 五、验收标准
+
+| # | 验收项 | 优先级 |
+|---|--------|--------|
+| 1 | WebSocket 连接建立和消息收发正常 | P0 |
+| 2 | 会话创建、列表、切换正常 | P0 |
+| 3 | 聊天消息通过 WebSocket 实时推送 | P0 |
+| 4 | 会话消息持久化，刷新后可恢复 | P0 |
+| 5 | 工具调用在聊天中正确展示 | P1 |
+| 6 | WebSocket 断开后自动重连 | P1 |
+| 7 | 重连后消息同步（无丢失） | P1 |
+| 8 | 单元测试覆盖率 ≥ 80% | P1 |
+| 9 | 无 TypeScript 编译错误 | P0 |
+| 10 | 现有功能无回归 | P0 |
+
+---
+
+## 六、风险与缓解
+
+| 风险 | 影响 | 缓解措施 |
+|------|------|----------|
+| AsyncGenerator → WS 桥接困难 | 高 | 第1周原型验证，失败则回退 SSE |
+| JSON 文件并发写入冲突 | 中 | 使用文件锁或内存队列 |
+| 前端组件重构引入 bug | 中 | 保留旧组件，渐进式迁移 |
+| 消息丢失（重连间隙） | 中 | sequenceId + sync 端点 |
+
+---
+
+## 七、技术决策记录
+
+| 决策 | 选择 | 理由 |
+|------|------|------|
+| WebSocket 库 | `ws` (后端) + 原生 (前端) | 轻量、标准、无额外依赖 |
+| 会话持久化 | JSON 文件 | 与 fileProtocol 风格一致，简单可靠 |
+| 工具审批 | v1 降级为展示 | CLI spawn 无法暂停，SDK 模式需重构 |
+| 组件策略 | 复用 chat/ 目录 | 避免维护成本翻倍 |
+| 认证 | v1 去掉 | localhost 本地工具，无需认证 |
+| 消息排序 | sequenceId (应用层计数器) | 简单可靠，不依赖数据库 |
+
+---
+
+*此计划基于团队批判会议结论制定，已采纳 Developer 7 项批判意见和 Tester 6 项批判意见。*

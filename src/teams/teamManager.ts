@@ -55,8 +55,6 @@ export class TeamManager extends EventEmitter {
     logger.info(`Received user message: ${userMessage.slice(0, 100)}`);
 
     // Step 1: Send to Lead for analysis
-    yield { type: 'agent_message', team: 'lead', content: '分析用户需求...' };
-
     const leadConfig = await this.configManager.load('lead');
     const leadExecutor = this.getOrCreateExecutor('lead', leadConfig);
 
@@ -67,11 +65,12 @@ export class TeamManager extends EventEmitter {
     for await (const event of leadExecutor.execute(userMessage)) {
       leadEvents.push(event);
 
-      // Forward lead events to chat
+      // Forward lead events to chat (preserve metadata for tool names)
       yield {
-        type: event.type === 'agent_message' ? 'agent_message' : 'tool_call',
+        type: event.type === 'agent_message' ? 'agent_message' : event.type as any,
         team: 'lead',
         content: event.content,
+        metadata: event.metadata,
       };
     }
 
@@ -81,12 +80,11 @@ export class TeamManager extends EventEmitter {
     const tasks = this.parseTasksFromLeadOutput(leadEvents);
 
     if (tasks.length === 0) {
-      yield { type: 'agent_message', team: 'lead', content: '未检测到任务分配，Lead 直接回复用户' };
       return;
     }
 
     // Step 3: Distribute tasks to Dev and Test
-    yield { type: 'agent_message', team: 'lead', content: `已分配 ${tasks.length} 个任务` };
+    yield { type: 'system', team: 'lead', content: `已分配 ${tasks.length} 个任务` };
 
     const devTasks = tasks.filter(t => t.assignedTo === 'dev');
     const testTasks = tasks.filter(t => t.assignedTo === 'test');
@@ -114,9 +112,10 @@ export class TeamManager extends EventEmitter {
 
     for await (const event of summaryExecutor.execute(summaryPrompt)) {
       yield {
-        type: 'agent_message',
+        type: event.type === 'agent_message' ? 'agent_message' : event.type as any,
         team: 'lead',
         content: event.content,
+        metadata: event.metadata,
       };
     }
 

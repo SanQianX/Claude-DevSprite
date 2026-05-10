@@ -1,29 +1,63 @@
 /**
  * Chat Store
- * Manages chat messages and SSE connection
+ * Manages chat messages and sessions via WebSocket connection
  */
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { chatApi, type ChatEvent } from '../api/teams';
+import { getWebSocketClient, type WsMessage, type ConnectionState } from '../api/websocket';
+import type { Session, SessionMessage } from '../types/session';
 
 export interface ChatMessage {
   id: string;
-  type: 'user' | 'agent' | 'tool' | 'error' | 'system';
+  type: 'user' | 'agent' | 'tool_call' | 'tool_result' | 'error' | 'system';
   team?: string;
   content: string;
   timestamp: Date;
-  taskId?: string;
+  sessionId?: string;
+  sequenceId?: number;
   metadata?: Record<string, any>;
+  isStreaming?: boolean;
 }
+
+// Valid message types — module-level constant for O(1) lookup on hot path
+const VALID_MESSAGE_TYPES = new Set<ChatMessage['type']>([
+  'user', 'agent', 'tool_call', 'tool_result', 'error', 'system'
+]);
 
 export const useChatStore = defineStore('chat', () => {
   // State
   const messages = ref<ChatMessage[]>([]);
+  const sessions = ref<Session[]>([]);
   const isConnected = ref(false);
+  const isAuthenticated = ref(false);
   const isSending = ref(false);
   const error = ref<string | null>(null);
-  let eventSource: EventSource | null = null;
+  const activeSessionId = ref<string | null>(null);
+  const isThinking = ref(false);
+  const thinkingContent = ref('');
+  const thinkingExpanded = ref(true);
+
+  // WebSocket client
+  let wsClient = getWebSocketClient();
+  let _handlersRegistered = false;
+  let currentProjectPath: string | null = null;
+
+  // Event handler registry — single source of truth for on/off pairing
+  const eventHandlers: [string, (data: WsMessage) => void][] = [
+    ['stateChange', handleStateChange],
+    ['auth.result', handleAuthResult],
+    ['session.list', handleSessionList],
+    ['session.created', handleSessionCreated],
+    ['session.activated', handleSessionActivated],
+    ['chat.message', handleChatMessage],
+    ['chat.stream', handleChatStream],
+    ['chat.thinking', handleThinking],
+    ['chat.done', handleDone],
+    ['session.sync.result', handleSyncResult],
+    ['error', handleError],
+    ['disconnected', handleDisconnected],
+  ];
 
   // Computed
   const agentMessages = computed(() =>
@@ -31,93 +65,275 @@ export const useChatStore = defineStore('chat', () => {
   );
 
   const toolMessages = computed(() =>
-    messages.value.filter(m => m.type === 'tool')
+    messages.value.filter(m => m.type === 'tool_call' || m.type === 'tool_result')
+  );
+
+  const activeSession = computed(() =>
+    sessions.value.find(s => s.id === activeSessionId.value) || null
   );
 
   // Actions
-  function connect() {
-    if (eventSource) {
-      eventSource.close();
+  function connect(projectPath?: string) {
+    // If projectPath changed, disconnect and reconnect with new path
+    if (projectPath !== undefined && projectPath !== currentProjectPath) {
+      currentProjectPath = projectPath;
+      // Unregister existing handlers before disconnect
+      if (_handlersRegistered) {
+        for (const [event, handler] of eventHandlers) {
+          wsClient.off(event, handler);
+        }
+        _handlersRegistered = false;
+      }
+      // Reset state for new project
+      messages.value = [];
+      sessions.value = [];
+      activeSessionId.value = null;
+      isThinking.value = false;
+      thinkingContent.value = '';
+      thinkingExpanded.value = true;
+      // Reconnect with new project path (handles disconnect + connect internally)
+      wsClient.reconnectWithProject(projectPath);
+      // Register handlers for the new connection
+      _handlersRegistered = true;
+      for (const [event, handler] of eventHandlers) {
+        wsClient.on(event, handler);
+      }
+      return;
     }
 
-    eventSource = chatApi.createStream();
+    if (_handlersRegistered) return;
+    _handlersRegistered = true;
 
-    eventSource.onopen = () => {
-      isConnected.value = true;
-      error.value = null;
-      addSystemMessage('已连接到服务器');
-    };
+    for (const [event, handler] of eventHandlers) {
+      wsClient.on(event, handler);
+    }
 
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as ChatEvent;
-        handleChatEvent(data);
-      } catch (err) {
-        console.error('Failed to parse SSE event:', err);
-      }
-    };
-
-    eventSource.onerror = () => {
-      isConnected.value = false;
-      error.value = '连接断开，正在重连...';
-      addSystemMessage('连接断开');
-
-      // Reconnect after 3 seconds
-      setTimeout(() => {
-        if (!isConnected.value) {
-          connect();
-        }
-      }, 3000);
-    };
+    wsClient.connect();
   }
 
   function disconnect() {
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
-      isConnected.value = false;
+    if (!_handlersRegistered) return;
+
+    for (const [event, handler] of eventHandlers) {
+      wsClient.off(event, handler);
+    }
+
+    wsClient.disconnect();
+    isConnected.value = false;
+    isAuthenticated.value = false;
+    _handlersRegistered = false;
+  }
+
+  // Event handlers
+  function handleStateChange(data: WsMessage) {
+    const state = data.state as ConnectionState;
+    isConnected.value = state === 'connected' || state === 'authenticated';
+    isAuthenticated.value = state === 'authenticated';
+  }
+
+  function handleAuthResult(data: WsMessage) {
+    if (!data.success) {
+      error.value = '认证失败';
+      addSystemMessage('认证失败');
+    }
+    // Success is handled by handleStateChange setting isAuthenticated
+  }
+
+  function handleSessionList(data: WsMessage) {
+    sessions.value = data.sessions || [];
+  }
+
+  function handleSessionCreated(data: WsMessage) {
+    const session = data.session as Session;
+    activeSessionId.value = session.id;
+    // Add new session to list so sidebar can display it
+    if (!sessions.value.find(s => s.id === session.id)) {
+      sessions.value = [session, ...sessions.value];
+    }
+    messages.value = [];
+  }
+
+  function handleSessionActivated(data: WsMessage) {
+    const { sessionId, messages: sessionMessages } = data;
+    activeSessionId.value = sessionId;
+
+    // Load messages from session
+    if (sessionMessages && Array.isArray(sessionMessages)) {
+      messages.value = sessionMessages.map(mapSessionMessage);
+    } else {
+      messages.value = [];
     }
   }
 
-  function handleChatEvent(event: ChatEvent) {
-    const message: ChatMessage = {
-      id: generateId(),
-      type: mapEventType(event.type),
-      team: event.team,
-      content: event.content,
-      timestamp: new Date(),
-      taskId: event.taskId,
-      metadata: event.metadata,
+  function handleChatMessage(data: WsMessage) {
+    const { sessionId, message } = data;
+
+    // Only add if it's for our active session
+    if (sessionId === activeSessionId.value) {
+      const chatMessage = mapSessionMessage(message);
+
+      // Remove streaming message if this is an agent message
+      if (chatMessage.type === 'agent') {
+        const streamIndex = messages.value.findIndex(m => m.id === `stream-${sessionId}`);
+        if (streamIndex >= 0) {
+          messages.value.splice(streamIndex, 1);
+        }
+      }
+
+      messages.value.push(chatMessage);
+    }
+  }
+
+  function handleChatStream(data: WsMessage) {
+    const { sessionId, content, team } = data;
+
+    // Only handle if it's for our active session
+    if (sessionId !== activeSessionId.value) return;
+
+    // Find or create the streaming message
+    const streamId = `stream-${sessionId}`;
+    const existingIndex = messages.value.findIndex(m => m.id === streamId);
+
+    if (existingIndex >= 0) {
+      // Update existing streaming message
+      messages.value[existingIndex] = {
+        ...messages.value[existingIndex],
+        content,
+      };
+    } else {
+      // Create new streaming message
+      messages.value.push({
+        id: streamId,
+        type: 'agent',
+        team,
+        content,
+        timestamp: new Date(),
+        isStreaming: true,
+      });
+    }
+  }
+
+  function handleThinking(data: WsMessage) {
+    if (data.sessionId !== activeSessionId.value) return;
+    isThinking.value = true;
+    if (data.content) {
+      thinkingContent.value += data.content + '\n';
+    }
+  }
+
+  function handleDone(_data: WsMessage) {
+    isThinking.value = false;
+    thinkingExpanded.value = false;
+  }
+
+  function handleSyncResult(data: WsMessage) {
+    const { sessionId, messages: syncedMessages } = data;
+
+    if (sessionId === activeSessionId.value && Array.isArray(syncedMessages)) {
+      // Batch into single reactive update to avoid N individual re-renders
+      const existingIds = new Set(messages.value.map(m => m.id));
+      const newMsgs = syncedMessages
+        .map(mapSessionMessage)
+        .filter(m => !existingIds.has(m.id));
+      if (newMsgs.length > 0) {
+        messages.value = [...messages.value, ...newMsgs]
+          .sort((a, b) => (a.sequenceId || 0) - (b.sequenceId || 0));
+      }
+    }
+  }
+
+  function handleError(data: WsMessage) {
+    error.value = data.message || '发生错误';
+    addSystemMessage(`错误: ${error.value}`);
+  }
+
+  function handleDisconnected(_data: WsMessage) {
+    isConnected.value = false;
+    isAuthenticated.value = false;
+    addSystemMessage('连接断开，正在重连...');
+  }
+
+  // Helper to map session message to chat message
+  function mapSessionMessage(msg: SessionMessage): ChatMessage {
+    return {
+      id: msg.id || generateId(),
+      type: VALID_MESSAGE_TYPES.has(msg.type) ? msg.type : 'system',
+      team: msg.team,
+      content: msg.content,
+      timestamp: new Date(msg.timestamp || Date.now()),
+      sessionId: msg.sessionId,
+      sequenceId: msg.sequenceId,
+      metadata: msg.metadata,
     };
-
-    messages.value.push(message);
-
-    // Auto-scroll to bottom
-    scrollToBottom();
   }
 
   async function sendMessage(content: string) {
     if (!content.trim() || isSending.value) return;
 
-    // Add user message
-    const userMessage: ChatMessage = {
-      id: generateId(),
-      type: 'user',
-      content,
-      timestamp: new Date(),
-    };
-    messages.value.push(userMessage);
+    // Create a new session if none active
+    if (!activeSessionId.value) {
+      await createSessionAndWait();
+      if (!activeSessionId.value) {
+        error.value = '无法创建会话';
+        return;
+      }
+    }
 
     isSending.value = true;
     error.value = null;
+    // Reset thinking state for new message
+    isThinking.value = false;
+    thinkingContent.value = '';
+    thinkingExpanded.value = true;
 
     try {
-      await chatApi.send(content);
+      wsClient.sendChatMessage(activeSessionId.value, content);
     } catch (err: any) {
       error.value = err.message || '发送失败';
       addSystemMessage(`发送失败: ${error.value}`);
     } finally {
       isSending.value = false;
+    }
+  }
+
+  /**
+   * Create a session and wait for server confirmation via Promise
+   */
+  function createSessionAndWait(title?: string, timeoutMs = 5000): Promise<Session | null> {
+    return new Promise((resolve) => {
+      if (activeSessionId.value) {
+        // Already have an active session
+        resolve(activeSession.value);
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        wsClient.off('session.created', onCreated);
+        resolve(null);
+      }, timeoutMs);
+
+      function onCreated(data: WsMessage) {
+        clearTimeout(timeout);
+        wsClient.off('session.created', onCreated);
+        resolve(data.session as Session);
+      }
+
+      wsClient.on('session.created', onCreated);
+      wsClient.createSession(title);
+    });
+  }
+
+  function createSession(title?: string) {
+    wsClient.createSession(title);
+  }
+
+  function activateSession(sessionId: string) {
+    wsClient.activateSession(sessionId);
+  }
+
+  function syncSession(lastSequenceId: number) {
+    if (activeSessionId.value) {
+      wsClient.syncSession(activeSessionId.value, lastSequenceId);
     }
   }
 
@@ -135,17 +351,15 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = [];
   }
 
-  function mapEventType(eventType: string): ChatMessage['type'] {
-    switch (eventType) {
-      case 'agent_message':
-        return 'agent';
-      case 'tool_call':
-      case 'tool_result':
-        return 'tool';
-      case 'error':
-        return 'error';
-      default:
-        return 'system';
+  function deleteSession(sessionId: string) {
+    sessions.value = sessions.value.filter(s => s.id !== sessionId);
+    if (activeSessionId.value === sessionId) {
+      const next = sessions.value[0];
+      if (next) {
+        activateSession(next.id);
+      } else {
+        clearMessages();
+      }
     }
   }
 
@@ -153,30 +367,33 @@ export const useChatStore = defineStore('chat', () => {
     return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   }
 
-  function scrollToBottom() {
-    setTimeout(() => {
-      const container = document.querySelector('.chat-messages');
-      if (container) {
-        container.scrollTop = container.scrollHeight;
-      }
-    }, 100);
-  }
-
   return {
     // State
     messages,
+    sessions,
     isConnected,
+    isAuthenticated,
     isSending,
     error,
+    activeSessionId,
+    isThinking,
+    thinkingContent,
+    thinkingExpanded,
 
     // Computed
     agentMessages,
     toolMessages,
+    activeSession,
 
     // Actions
     connect,
     disconnect,
     sendMessage,
+    createSession,
+    createSessionAndWait,
+    activateSession,
+    syncSession,
+    deleteSession,
     addSystemMessage,
     clearMessages,
   };

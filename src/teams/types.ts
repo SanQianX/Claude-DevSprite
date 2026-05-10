@@ -121,6 +121,7 @@ export type ChatEventType =
   | 'tool_call'
   | 'tool_result'
   | 'file_change'
+  | 'system'
   | 'error'
   | 'completed';
 

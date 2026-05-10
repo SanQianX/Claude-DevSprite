@@ -12,14 +12,26 @@
         </div>
 
         <div class="modal-body">
-          <label class="input-label">{{ t('home.projectPath') }}</label>
-          <input
-            ref="pathInput"
+          <label class="input-label">{{ t('home.selectProjectFolder') || 'Select project folder' }}</label>
+
+          <!-- Folder browser component -->
+          <FolderBrowser
             v-model="projectPath"
-            class="input"
-            :placeholder="t('home.projectPathPlaceholder')"
-            @keyup.enter="handleAdd"
+            @select="onFolderSelect"
           />
+
+          <!-- Manual path input as fallback -->
+          <div class="manual-input-section">
+            <label class="input-label">{{ t('home.orEnterManually') || 'Or enter path manually:' }}</label>
+            <input
+              ref="pathInput"
+              v-model="manualPath"
+              class="input"
+              :placeholder="t('home.projectPathPlaceholder')"
+              @keyup.enter="handleAdd"
+            />
+          </div>
+
           <p v-if="errorMsg" class="error-text">{{ errorMsg }}</p>
         </div>
 
@@ -27,7 +39,7 @@
           <button class="btn btn-secondary" @click="$emit('close')">
             {{ t('common.cancel') }}
           </button>
-          <button class="btn btn-primary" :disabled="!projectPath.trim() || adding" @click="handleAdd">
+          <button class="btn btn-primary" :disabled="!finalPath.trim() || adding" @click="handleAdd">
             <span v-if="adding" class="spinner"></span>
             {{ t('common.add') }}
           </button>
@@ -38,10 +50,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useProjectsStore } from '@/stores/projects'
 import { useUIStore } from '@/stores/ui'
+import FolderBrowser from '@/components/common/FolderBrowser.vue'
 
 const emit = defineEmits<{
   close: []
@@ -52,16 +65,23 @@ const projectsStore = useProjectsStore()
 const { t } = storeToRefs(useUIStore())
 
 const projectPath = ref('')
+const manualPath = ref('')
 const adding = ref(false)
 const errorMsg = ref('')
 const pathInput = ref<HTMLInputElement | null>(null)
 
-nextTick(() => {
-  pathInput.value?.focus()
+// Use manual path if provided, otherwise use browser selection
+const finalPath = computed(() => {
+  return manualPath.value.trim() || projectPath.value
 })
 
+function onFolderSelect(path: string) {
+  // When a folder is selected in browser, sync to manual input
+  manualPath.value = path
+}
+
 async function handleAdd() {
-  const path = projectPath.value.trim()
+  const path = finalPath.value
   if (!path || adding.value) return
 
   adding.value = true
@@ -140,6 +160,12 @@ async function handleAdd() {
   font-weight: 500;
   color: var(--color-text-primary, #1f2328);
   margin-bottom: 6px;
+}
+
+.manual-input-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border, #d0d7de);
 }
 
 .error-text {

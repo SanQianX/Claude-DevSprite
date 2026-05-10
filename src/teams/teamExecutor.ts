@@ -1,23 +1,24 @@
 /**
- * TeamExecutor - Claude Code CLI Executor
- * Manages Claude CLI subprocess execution with streaming JSON output
+ * TeamExecutor - Claude CLI Executor
+ * Spawns local Claude Code CLI subprocess for tool-capable execution
+ * Handles file operations, command execution, web search via CLI's built-in tools
  */
 
-import { spawn, ChildProcess } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { spawn, type ChildProcess } from 'child_process';
 import { createLogger } from '../utils/logger';
 import type { AgentEvent, TeamName, TeamExecutorConfig } from './types';
 
 const logger = createLogger('team-executor');
 
+// Timeout for CLI execution (5 minutes)
+const CLI_TIMEOUT_MS = 5 * 60 * 1000;
+
 export class TeamExecutor {
-  private process: ChildProcess | null = null;
   private config: TeamExecutorConfig;
   private projectPath: string;
   private teamName: TeamName;
   private aborted = false;
+  private currentProcess: ChildProcess | null = null;
 
   constructor(teamName: TeamName, config: TeamExecutorConfig, projectPath: string) {
     this.teamName = teamName;
@@ -26,114 +27,221 @@ export class TeamExecutor {
   }
 
   /**
-   * Execute a task with Claude CLI
-   * Yields AgentEvents as they arrive from the stream
+   * Execute a task via Claude CLI subprocess
+   * CLI handles the full agentic loop: tool calls, file ops, commands, etc.
+   * Yields AgentEvents as they arrive from the stream-json output
    */
   async *execute(prompt: string, context?: string): AsyncIterable<AgentEvent> {
     this.aborted = false;
 
-    const args = this.buildArgs(prompt, context);
-    const claudePath = this.resolveClaudeCLI();
-    const env = this.buildCleanEnv();
+    const fullPrompt = context
+      ? `## Context\n${context}\n\n## Task\n${prompt}`
+      : prompt;
 
-    logger.info(`[${this.teamName}] Spawning: ${claudePath} ${args.slice(0, 5).join(' ')}...`);
+    // Build CLI arguments
+    // --print: non-interactive mode
+    // --output-format stream-json: structured JSON output per line
+    // --verbose: include tool use details
+    // --model sonnet: maps to mimo-v2.5 via ANTHROPIC_DEFAULT_SONNET_MODEL env var
+    // --dangerously-skip-permissions: auto-approve tool calls (local tool, no security risk)
+    const args = [
+      '-p', fullPrompt,
+      '--output-format', 'stream-json',
+      '--verbose',
+      '--model', this.config.model || 'sonnet',
+      '--dangerously-skip-permissions',
+      '--setting-sources', '',
+    ];
 
-    this.process = spawn(claudePath, args, {
+    logger.info(`[${this.teamName}] Spawning claude CLI with model: ${this.config.model || 'sonnet'}`);
+    logger.info(`[${this.teamName}] CWD: ${this.projectPath}`);
+
+    // Set up clean environment with mimo API config
+    const env: Record<string, string> = {
+      ...process.env as Record<string, string>,
+      ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY || '',
+      ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: process.env.ANTHROPIC_DEFAULT_SONNET_MODEL || 'mimo-v2.5',
+      // Remove Claude Code specific env vars that might interfere
+      CLAUDECODE: '',
+      CLAUDE_CODE_SESSION: '',
+    };
+
+    const isWin = process.platform === 'win32';
+    // On Windows, spawn node directly with CLI script to avoid shell hanging issues
+    // The claude shim is at: %APPDATA%/npm/node_modules/@anthropic-ai/claude-code/cli.js
+    let spawnCmd: string;
+    let spawnArgs: string[];
+    if (isWin) {
+      const appData = process.env.APPDATA || `${process.env.USERPROFILE}\\AppData\\Roaming`;
+      const cliScript = `${appData}\\npm\\node_modules\\@anthropic-ai\\claude-code\\cli.js`;
+      spawnCmd = 'node';
+      spawnArgs = [cliScript, ...args];
+    } else {
+      spawnCmd = 'claude';
+      spawnArgs = args;
+    }
+    const child = spawn(spawnCmd, spawnArgs, {
       cwd: this.projectPath,
       env,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
-      shell: process.platform === 'win32',
     });
 
-    let buffer = '';
-    let stderr = '';
+    this.currentProcess = child;
 
-    // Handle stderr
-    this.process.stderr?.on('data', (data: Buffer) => {
-      stderr += data.toString();
-    });
+    let stdoutBuffer = '';
+    let resolved = false;
+    let processError: Error | null = null;
 
-    // Handle process errors
-    this.process.on('error', (error) => {
-      logger.error(`[${this.teamName}] Process error: ${error.message}`);
+    // Handle process-level errors (spawn failures, etc.)
+    child.on('error', (err) => {
+      processError = err;
+      resolved = true;
+      logger.error(`[${this.teamName}] Process error: ${err.message}`);
     });
 
     // Set up timeout
-    const timeout = this.config.timeout || 600000;
-    const timeoutId = setTimeout(() => {
-      if (this.process && !this.aborted) {
-        logger.warn(`[${this.teamName}] Timeout after ${timeout}ms, killing process`);
-        this.abort();
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        logger.warn(`[${this.teamName}] CLI timeout after ${CLI_TIMEOUT_MS}ms`);
+        this.killProcess(child);
       }
-    }, timeout);
+    }, CLI_TIMEOUT_MS);
 
     try {
-      // Process stdout stream
-      for await (const chunk of this.process.stdout!) {
-        if (this.aborted) break;
+      // Parse stdout line by line (each line is a JSON object)
+      for await (const chunk of child.stdout!) {
+        if (this.aborted || resolved) break;
 
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop()!; // Keep incomplete line in buffer
+        stdoutBuffer += chunk.toString();
+        const lines = stdoutBuffer.split('\n');
+        // Keep the last incomplete line in buffer
+        stdoutBuffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (!line.trim()) continue;
+          if (this.aborted || resolved) break;
 
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          let event: any;
           try {
-            const event = JSON.parse(line);
-            const mapped = this.mapEvent(event);
-            if (mapped) {
-              yield mapped;
-            }
+            event = JSON.parse(trimmed);
           } catch {
-            // Ignore non-JSON lines
-            logger.debug(`[${this.teamName}] Non-JSON line: ${line.slice(0, 100)}`);
+            // Not JSON, skip (might be stderr mixed in)
+            continue;
+          }
+
+          // Process assistant messages (text and tool_use)
+          if (event.type === 'assistant' && event.message?.content) {
+            for (const block of event.message.content) {
+              if (this.aborted) break;
+
+              if (block.type === 'text' && block.text) {
+                logger.info(`[${this.teamName}] Text: ${block.text.slice(0, 100)}...`);
+                yield {
+                  type: 'agent_message',
+                  team: this.teamName,
+                  content: block.text,
+                };
+              } else if (block.type === 'tool_use') {
+                logger.info(`[${this.teamName}] Tool call: ${block.name}`);
+                yield {
+                  type: 'tool_call',
+                  team: this.teamName,
+                  content: `Calling ${block.name}...`,
+                  metadata: {
+                    toolName: block.name,
+                    toolArgs: block.input,
+                  },
+                };
+              }
+            }
+          }
+
+          // Process tool results
+          if (event.type === 'tool_result') {
+            logger.info(`[${this.teamName}] Tool result received`);
+            yield {
+              type: 'tool_result',
+              team: this.teamName,
+              content: event.content || '',
+            };
+          }
+
+          // Process result (final)
+          if (event.type === 'result') {
+            resolved = true;
+            logger.info(`[${this.teamName}] CLI completed in ${event.duration_ms}ms, cost: $${event.total_cost_usd}`);
+            // Result text is already yielded via assistant message blocks above
+            // No need to yield again - just mark as resolved
           }
         }
       }
 
-      // Process remaining buffer
-      if (buffer.trim() && !this.aborted) {
+      // Process any remaining buffer
+      if (!resolved && stdoutBuffer.trim()) {
         try {
-          const event = JSON.parse(buffer);
-          const mapped = this.mapEvent(event);
-          if (mapped) {
-            yield mapped;
+          const event = JSON.parse(stdoutBuffer.trim());
+          if (event.type === 'assistant' && event.message?.content) {
+            for (const block of event.message.content) {
+              if (block.type === 'text' && block.text) {
+                yield {
+                  type: 'agent_message',
+                  team: this.teamName,
+                  content: block.text,
+                };
+              }
+            }
           }
         } catch {
-          // Ignore
+          // Ignore parse errors for remaining buffer
         }
       }
-
-      // Wait for process to exit
-      await new Promise<void>((resolve) => {
-        this.process!.on('close', (code) => {
-          if (code !== 0 && !this.aborted) {
-            logger.error(`[${this.teamName}] Process exited with code ${code}\nstderr: ${stderr.slice(0, 500)}`);
-          }
-          resolve();
-        });
-      });
-
-      // Yield completion event
+    } catch (error: any) {
       if (!this.aborted) {
+        logger.error(`[${this.teamName}] CLI error: ${error.message}`);
         yield {
-          type: 'completed',
+          type: 'error',
           team: this.teamName,
-          content: '任务执行完成',
+          content: `CLI error: ${error.message}`,
         };
       }
-    } catch (error: any) {
-      logger.error(`[${this.teamName}] Execution error: ${error.message}`);
+    }
+
+    // Check for process-level errors that occurred outside the for await loop
+    if (processError && !this.aborted) {
       yield {
         type: 'error',
         team: this.teamName,
-        content: `执行错误: ${error.message}`,
+        content: `CLI error: ${processError.message}`,
       };
-    } finally {
-      clearTimeout(timeoutId);
-      this.process = null;
+    }
+
+    // Cleanup
+    clearTimeout(timeout);
+    this.killProcess(child);
+    this.currentProcess = null;
+  }
+
+  /**
+   * Kill the CLI process
+   */
+  private killProcess(child: ChildProcess): void {
+    try {
+      if (child && !child.killed) {
+        child.kill('SIGTERM');
+        // Force kill after 3 seconds if still alive
+        setTimeout(() => {
+          if (child && !child.killed) {
+            child.kill('SIGKILL');
+          }
+        }, 3000);
+      }
+    } catch (e) {
+      // Ignore kill errors
     }
   }
 
@@ -142,128 +250,9 @@ export class TeamExecutor {
    */
   abort(): void {
     this.aborted = true;
-    if (this.process) {
-      logger.info(`[${this.teamName}] Aborting process`);
-      this.process.kill('SIGTERM');
-
-      // Force kill after 5 seconds if still running
-      setTimeout(() => {
-        if (this.process) {
-          this.process.kill('SIGKILL');
-          this.process = null;
-        }
-      }, 5000);
+    if (this.currentProcess) {
+      this.killProcess(this.currentProcess);
     }
-  }
-
-  /**
-   * Build CLI arguments
-   */
-  private buildArgs(prompt: string, context?: string): string[] {
-    const args = [
-      '--print',
-      '--output-format', 'stream-json',
-      '--model', this.config.model,
-      '--max-turns', String(this.config.maxTurns),
-    ];
-
-    if (this.config.allowedTools.length > 0) {
-      args.push('--allowedTools', this.config.allowedTools.join(','));
-    }
-
-    if (this.config.disallowedTools && this.config.disallowedTools.length > 0) {
-      args.push('--disallowedTools', this.config.disallowedTools.join(','));
-    }
-
-    // Assemble full prompt with context
-    const fullPrompt = context
-      ? `## 上下文\n${context}\n\n## 任务\n${prompt}`
-      : prompt;
-    args.push('-p', fullPrompt);
-
-    return args;
-  }
-
-  /**
-   * Map Claude CLI event to unified AgentEvent
-   */
-  private mapEvent(cliEvent: any): AgentEvent | null {
-    switch (cliEvent.type) {
-      case 'assistant':
-        return {
-          type: 'agent_message',
-          team: this.teamName,
-          content: cliEvent.message?.content || '',
-          metadata: {
-            tokenUsage: cliEvent.usage
-              ? { prompt: cliEvent.usage.input_tokens, completion: cliEvent.usage.output_tokens }
-              : undefined,
-          },
-        };
-
-      case 'tool_use':
-        return {
-          type: 'tool_call',
-          team: this.teamName,
-          content: `调用工具: ${cliEvent.name}`,
-          metadata: {
-            toolName: cliEvent.name,
-            toolArgs: cliEvent.input,
-          },
-        };
-
-      case 'tool_result':
-        return {
-          type: 'tool_result',
-          team: this.teamName,
-          content: typeof cliEvent.content === 'string'
-            ? cliEvent.content.slice(0, 500)
-            : JSON.stringify(cliEvent.content).slice(0, 500),
-          metadata: {
-            toolName: cliEvent.tool_use_id,
-          },
-        };
-
-      default:
-        return null;
-    }
-  }
-
-  /**
-   * Resolve Claude CLI path
-   */
-  private resolveClaudeCLI(): string {
-    const candidates = [
-      path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude.cmd'),
-      path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude'),
-      '/usr/local/bin/claude',
-      '/usr/bin/claude',
-      path.join(os.homedir(), '.local', 'bin', 'claude'),
-    ];
-
-    for (const candidate of candidates) {
-      if (fs.existsSync(candidate)) {
-        return candidate;
-      }
-    }
-    return 'claude';
-  }
-
-  /**
-   * Build clean environment for Claude CLI subprocess
-   */
-  private buildCleanEnv(): Record<string, string> {
-    const env: Record<string, string> = {};
-    const excluded = ['CLAUDECODE', 'CLAUDE_CODE_SESSION'];
-
-    for (const [key, val] of Object.entries(process.env)) {
-      if (val !== undefined && !excluded.includes(key)) {
-        env[key] = val;
-      }
-    }
-
-    env.CLAUDE_CODE_ENTRYPOINT = 'sdk-ts';
-
-    return env;
+    logger.info(`[${this.teamName}] Aborted`);
   }
 }

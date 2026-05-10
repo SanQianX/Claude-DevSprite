@@ -27,6 +27,8 @@ export default {
     noProjectsDesc: 'Connect your first project to get started',
     projectPath: 'Project Path',
     projectPathPlaceholder: 'Enter project directory path, e.g.: D:\\Code\\MyProject',
+    selectProjectFolder: 'Select project folder',
+    orEnterManually: 'Or enter path manually:',
     addSuccess: 'Project added successfully',
     addFailed: 'Failed to add project',
     loading: 'Loading...',
@@ -34,6 +36,8 @@ export default {
     totalProjects: '{n} projects total',
     deleteConfirm: 'Remove project "{name}" from the system? Local files will NOT be deleted.',
     deleteFailed: 'Failed to remove project',
+    drive: 'Drive',
+    noFilesYet: 'No files yet, analysis will generate documents',
   },
   project: {
     repoType: 'Repo Type',

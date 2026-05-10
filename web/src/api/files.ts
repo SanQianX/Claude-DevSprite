@@ -1,5 +1,5 @@
-import { apiClient } from './client'
-import type { SourceCodeData, ApiResponse } from '@/types'
+import { apiClient, unwrap } from './client'
+import type { SourceCodeData } from '@/types'
 
 export const filesApi = {
   /**
@@ -19,12 +19,8 @@ export const filesApi = {
     if (end && end > 0) {
       params.append('end', end.toString())
     }
-    const response = await apiClient.get<SourceCodeData>(
+    return unwrap(apiClient.get<SourceCodeData>(
       `/projects/${projectName}/source?${params.toString()}`
-    )
-    if (response.success && response.data) {
-      return response.data
-    }
-    throw new Error(response.error || 'Failed to fetch source code')
+    ))
   }
 }

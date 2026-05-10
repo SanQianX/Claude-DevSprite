@@ -10,7 +10,7 @@
       </main>
 
       <router-link
-        :to="`/chat`"
+        :to="`/project/${route.params.projectName}/dev`"
         class="dev-chat-fab"
         title="开发聊天"
       >

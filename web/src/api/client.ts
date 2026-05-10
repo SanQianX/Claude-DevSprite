@@ -65,3 +65,14 @@ export const apiClient = {
     }),
   delete: <T>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' })
 }
+
+/**
+ * Unwrap an ApiResponse, returning data on success or throwing on failure
+ */
+export async function unwrap<T>(promise: Promise<ApiResponse<T>>): Promise<T> {
+  const result = await promise
+  if (!result.success) {
+    throw new Error(result.error || 'API call failed')
+  }
+  return result.data as T
+}

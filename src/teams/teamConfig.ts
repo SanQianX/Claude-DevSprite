@@ -14,7 +14,7 @@ const DEFAULT_CONFIGS: Record<TeamName, TeamConfig> = {
   lead: {
     name: 'lead',
     displayName: 'Lead 协调者',
-    model: 'claude-sonnet-4-20250514',
+    model: 'mimo-v2.5',
     maxTurns: 15,
     allowedTools: ['Read', 'Glob', 'Grep', 'WebSearch'],
     timeout: 600000,
@@ -23,7 +23,7 @@ const DEFAULT_CONFIGS: Record<TeamName, TeamConfig> = {
   dev: {
     name: 'dev',
     displayName: '开发团队',
-    model: 'claude-sonnet-4-20250514',
+    model: 'mimo-v2.5',
     maxTurns: 20,
     allowedTools: ['Read', 'Write', 'Edit', 'Bash(npm:*)', 'Bash(npx:*)', 'Bash(git:*)'],
     disallowedTools: ['Bash(rm *)', 'Bash(git push --force)'],
@@ -33,7 +33,7 @@ const DEFAULT_CONFIGS: Record<TeamName, TeamConfig> = {
   test: {
     name: 'test',
     displayName: '测试团队',
-    model: 'claude-sonnet-4-20250514',
+    model: 'mimo-v2.5',
     maxTurns: 15,
     allowedTools: ['Read', 'Glob', 'Grep', 'Bash(npm test)', 'Bash(npx vitest:*)', 'Bash(npx playwright:*)'],
     timeout: 600000,

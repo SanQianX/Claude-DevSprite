@@ -27,6 +27,8 @@ export default {
     noProjectsDesc: '添加你的第一个项目以开始使用',
     projectPath: '项目路径',
     projectPathPlaceholder: '输入项目目录路径，例如：D:\\Code\\MyProject',
+    selectProjectFolder: '选择项目文件夹',
+    orEnterManually: '或手动输入路径：',
     addSuccess: '项目添加成功',
     addFailed: '项目添加失败',
     loading: '加载中...',
@@ -34,6 +36,8 @@ export default {
     totalProjects: '共 {n} 个项目',
     deleteConfirm: '确定从系统中移除项目 "{name}" 吗？不会删除本地文件。',
     deleteFailed: '删除项目失败',
+    drive: '磁盘驱动器',
+    noFilesYet: '暂无文件，分析后将生成文档',
   },
   project: {
     repoType: '仓库类型',

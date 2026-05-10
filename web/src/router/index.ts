@@ -31,6 +31,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/ProjectOverview.vue')
       },
       {
+        path: 'dev',
+        name: 'project-dev',
+        component: () => import('@/views/DevChatView.vue')
+      },
+      {
         path: 'doc/:path(.*)',
         name: 'document',
         component: () => import('@/views/DocumentView.vue'),

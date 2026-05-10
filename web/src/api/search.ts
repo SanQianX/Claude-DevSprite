@@ -1,5 +1,5 @@
-import { apiClient } from './client'
-import type { SearchResponse, SearchResult, ApiResponse } from '@/types'
+import { apiClient, unwrap } from './client'
+import type { SearchResponse } from '@/types'
 
 export const searchApi = {
   /**
@@ -10,13 +10,9 @@ export const searchApi = {
     projectName: string,
     query: string
   ): Promise<SearchResponse> {
-    const response = await apiClient.get<SearchResponse>(
+    return unwrap(apiClient.get<SearchResponse>(
       `/projects/${projectName}/search?q=${encodeURIComponent(query)}`
-    )
-    if (response.success && response.data) {
-      return response.data
-    }
-    throw new Error(response.error || 'Search failed')
+    ))
   },
 
   /**
@@ -24,12 +20,8 @@ export const searchApi = {
    * Returns: { query, results: SearchResult[] } (with projectName added to each result)
    */
   async searchAllProjects(query: string): Promise<SearchResponse> {
-    const response = await apiClient.get<SearchResponse>(
+    return unwrap(apiClient.get<SearchResponse>(
       `/search?q=${encodeURIComponent(query)}`
-    )
-    if (response.success && response.data) {
-      return response.data
-    }
-    throw new Error(response.error || 'Search failed')
+    ))
   }
 }

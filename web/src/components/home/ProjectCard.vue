@@ -106,6 +106,12 @@ function openChat() {
 }
 
 async function handleDelete() {
+  // Validate project name before attempting delete
+  if (!props.project.name || props.project.name.trim() === '') {
+    alert(t.value('home.deleteFailed'))
+    return
+  }
+
   const msg = t.value('home.deleteConfirm', { name: props.project.name })
   if (!confirm(msg)) return
 
