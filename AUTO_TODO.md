@@ -11,18 +11,18 @@
 - [x] 0.5 首页布局重构：Header → TokensBar → 项目列表表格 → Console（无侧边栏）
 - [x] 0.6 项目表格精简列（移除 Docs 列，列宽与 mockup 对齐）
 - [x] 0.7 AppHeader 搜索框 placeholder 改为通用搜索
-- [ ] 0.8 Console 可折叠功能增强（折叠时仅显示 Header 行，保留展开按钮）
+- [x] 0.8 Console 可折叠功能增强（折叠时仅显示 Header 行，保留展开按钮）
 - [ ] 0.9 构建验证 + 回归测试
 
 ## Phase 1 — 项目工作台基础框架
 
-- [ ] 1.1 创建 ProjectView.vue 容器组件（Dashboard/Workspace Tab 切换）
-- [ ] 1.2 路由更新：/project/:name 使用 ProjectView 作为默认子路由
-- [ ] 1.3 创建 WorkspaceView.vue 面板容器组件
-- [ ] 1.4 创建 SplitPane.vue 可拖拽分隔组件
-- [ ] 1.5 创建 ProjectToolbar.vue 工具栏（模式 Tab + 面板开关）
-- [ ] 1.6 面板开关逻辑 + 布局自适应（最少保留 Chat）
-- [ ] 1.7 构建验证 + 回归测试
+- [x] 1.1 创建 ProjectView.vue 容器组件（Dashboard/Workspace Tab 切换）
+- [x] 1.2 路由更新：/project/:name 使用 ProjectView 作为默认子路由
+- [x] 1.3 创建 WorkspaceView.vue 面板容器组件
+- [x] 1.4 创建 SplitPane.vue 可拖拽分隔组件
+- [x] 1.5 创建 ProjectToolbar.vue 工具栏（模式 Tab + 面板开关）
+- [x] 1.6 面板开关逻辑 + 布局自适应（最少保留 Chat）
+- [x] 1.7 构建验证 + 回归测试
 
 ## Phase 2 — Dashboard 模式
 

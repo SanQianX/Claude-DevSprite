@@ -1,15 +1,16 @@
 <template>
   <div class="project-layout">
-    <AppHeader />
+    <AppHeader v-if="!isProjectView" />
 
     <div class="project-content">
-      <AppSidebar v-if="sidebarOpen" class="sidebar" />
+      <AppSidebar v-if="sidebarOpen && !isProjectView" class="sidebar" />
 
-      <main class="main-content">
+      <main class="main-content" :class="{ 'full-width': isProjectView }">
         <router-view />
       </main>
 
       <router-link
+        v-if="!isProjectView"
         :to="`/project/${route.params.projectName}/dev`"
         class="dev-chat-fab"
         title="开发聊天"
@@ -20,12 +21,13 @@
         </svg>
       </router-link>
 
-      <AppTocPanel v-if="tocPanelOpen" class="toc-panel" />
+      <AppTocPanel v-if="tocPanelOpen && !isProjectView" class="toc-panel" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useProjectsStore } from '@/stores/projects'
@@ -41,6 +43,9 @@ const projectsStore = useProjectsStore()
 const knowledgeStore = useKnowledgeStore()
 const uiStore = useUIStore()
 const { sidebarOpen, tocPanelOpen } = storeToRefs(uiStore)
+
+// ProjectView (Dashboard/Workspace) renders its own header
+const isProjectView = computed(() => route.name === 'project')
 
 onMounted(async () => {
   const projectName = route.params.projectName as string
@@ -96,8 +101,12 @@ watch(
 .main-content {
   flex: 1;
   min-width: 0;
-  overflow-y: auto;
+  overflow: hidden;
   height: calc(100vh - 60px);
+}
+
+.main-content.full-width {
+  height: 100vh;
 }
 
 .toc-panel {
