@@ -74,12 +74,16 @@ function getTokenData(period: string) {
 export function registerTokenRoutes(app: Express): void {
   /**
    * GET /api/tokens
+   * GET /api/tokens/stats (alias)
    * Query params:
    *  - period: day | week | month | all (default: week)
    */
-  app.get('/api/tokens', asyncHandler(async (req: Request, res: Response) => {
+  const handler = asyncHandler(async (req: Request, res: Response) => {
     const period = (req.query.period as string) || 'week'
     const data = getTokenData(period)
     res.json(data)
-  }))
+  })
+
+  app.get('/api/tokens', handler)
+  app.get('/api/tokens/stats', handler)
 }

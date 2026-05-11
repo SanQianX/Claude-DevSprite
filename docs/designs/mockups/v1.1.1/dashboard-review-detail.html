@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard - 审查项详情展开</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; }
+.mockup { width: 1200px; margin: 40px auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.12); }
+.header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: #1a1a2e; color: #fff; }
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-title { font-size: 16px; font-weight: 600; }
+.header-tabs { display: flex; gap: 4px; }
+.header-tab { padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; color: #a0a0b0; }
+.header-tab.active { background: #3b82f6; color: #fff; }
+.content { padding: 24px; }
+.section { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; margin-bottom: 24px; }
+.section-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
+.section-title { font-size: 15px; font-weight: 600; color: #1e293b; }
+
+/* Review Detail */
+.review-detail { padding: 24px; }
+.review-detail-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+.severity-badge-lg { padding: 6px 14px; border-radius: 6px; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+.severity-high { background: #fef2f2; color: #dc2626; border: 2px solid #fecaca; }
+.review-detail-title { font-size: 20px; font-weight: 700; color: #1e293b; }
+.review-detail-location { font-size: 14px; color: #3b82f6; font-family: monospace; margin-top: 4px; cursor: pointer; }
+.review-detail-location:hover { text-decoration: underline; }
+
+.detail-section { margin-bottom: 20px; }
+.detail-label { font-size: 13px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.detail-text { font-size: 14px; color: #475569; line-height: 1.7; }
+
+.code-suggestion { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+.code-suggestion-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; }
+.code-suggestion-label { font-size: 12px; font-weight: 600; color: #475569; }
+.code-tabs { display: flex; gap: 4px; }
+.code-tab { padding: 3px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; color: #64748b; }
+.code-tab.active { background: #fff; color: #1e293b; border: 1px solid #d1d5db; }
+.code-block { padding: 16px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.6; }
+.code-block .removed { background: #fef2f2; color: #dc2626; display: block; padding: 2px 8px; margin: 2px -16px; border-left: 3px solid #dc2626; }
+.code-block .added { background: #f0fdf4; color: #16a34a; display: block; padding: 2px 8px; margin: 2px -16px; border-left: 3px solid #16a34a; }
+.code-block .context { color: #64748b; display: block; padding: 2px 8px; margin: 2px -16px; }
+.code-block .line-info { font-size: 11px; color: #94a3b8; margin-bottom: 8px; }
+
+.detail-meta { display: flex; gap: 24px; padding: 16px 0; border-top: 1px solid #e2e8f0; font-size: 13px; color: #64748b; }
+.detail-meta-item { display: flex; align-items: center; gap: 6px; }
+
+.detail-actions { display: flex; gap: 12px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
+.btn-lg { padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: 2px solid; display: flex; align-items: center; gap: 8px; }
+.btn-approve-lg { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.btn-approve-lg:hover { background: #dcfce7; }
+.btn-ignore-lg { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+.btn-ignore-lg:hover { background: #fee2e2; }
+.btn-discuss-lg { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+.btn-discuss-lg:hover { background: #dbeafe; }
+.btn-locate-lg { background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe; }
+.btn-locate-lg:hover { background: #ede9fe; }
+
+/* Status badges */
+.status-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.status-pending { background: #fef3c7; color: #92400e; }
+.status-approved { background: #dcfce7; color: #166534; }
+.status-ignored { background: #f1f5f9; color: #64748b; }
+
+/* Related reviews */
+.related-list { margin-top: 16px; }
+.related-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer; }
+.related-item:hover { background: #f8fafc; }
+.related-severity { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.related-title { font-size: 13px; color: #475569; }
+.related-file { font-size: 12px; color: #94a3b8; font-family: monospace; }
+</style>
+</head>
+<body>
+<div class="mockup">
+  <div class="header">
+    <div class="header-left">
+      <span style="font-size:20px">◂</span>
+      <span class="header-title">Claude-DevSprite</span>
+      <div class="header-tabs">
+        <div class="header-tab active">📊 Dashboard</div>
+        <div class="header-tab">💻 Workspace</div>
+      </div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">🔍 AI 审查队列 — 审查详情</div>
+        <span class="status-tag status-pending">⏳ 待审批</span>
+      </div>
+      <div class="review-detail">
+        <!-- Header -->
+        <div class="review-detail-header">
+          <span class="severity-badge-lg severity-high">🔴 HIGH</span>
+          <div>
+            <div class="review-detail-title">未处理的 API 密钥异常可能导致进程崩溃</div>
+            <div class="review-detail-location" title="点击在 Workspace 中定位">📍 src/analyzer/aiProvider.ts:87</div>
+          </div>
+        </div>
+
+        <!-- Problem Description -->
+        <div class="detail-section">
+          <div class="detail-label">📝 问题描述</div>
+          <div class="detail-text">
+            在 <code>AIProvider.callAI()</code> 方法中，当 API 密钥无效、服务不可用或网络超时时，
+            异常会被直接抛出但未被捕获。由于该方法被分析 Pipeline 调用，未捕获的异常会导致整个
+            worker 进程崩溃，影响所有正在进行的分析任务。
+          </div>
+        </div>
+
+        <!-- Code Suggestion -->
+        <div class="detail-section">
+          <div class="detail-label">💡 AI 修复建议</div>
+          <div class="code-suggestion">
+            <div class="code-suggestion-header">
+              <span class="code-suggestion-label">代码变更建议</span>
+              <div class="code-tabs">
+                <div class="code-tab active">Diff 视图</div>
+                <div class="code-tab">完整代码</div>
+              </div>
+            </div>
+            <div class="code-block">
+              <div class="line-info">@@ -85, +85 @@ src/analyzer/aiProvider.ts</div>
+              <div class="context">  async callAI(prompt: string): Promise&lt;AIResponse&gt; {</div>
+              <div class="removed">-   const response = await this.client.messages.create({</div>
+              <div class="removed">-     model: this.model,</div>
+              <div class="removed">-     max_tokens: 16384,</div>
+              <div class="removed">-     messages: [{ role: 'user', content: prompt }]</div>
+              <div class="removed">-   })</div>
+              <div class="removed">-   return { content: response.content }</div>
+              <div class="added">+   try {</div>
+              <div class="added">+     const response = await this.client.messages.create({</div>
+              <div class="added">+       model: this.model,</div>
+              <div class="added">+       max_tokens: 16384,</div>
+              <div class="added">+       messages: [{ role: 'user', content: prompt }]</div>
+              <div class="added">+     })</div>
+              <div class="added">+     return { content: response.content }</div>
+              <div class="added">+   } catch (error) {</div>
+              <div class="added">+     logger.error('SDK call failed, falling back to CLI', error)</div>
+              <div class="added">+     return await this.callViaCLI(prompt)</div>
+              <div class="added">+   }</div>
+              <div class="context">  }</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Meta Info -->
+        <div class="detail-meta">
+          <div class="detail-meta-item">📅 发现时间: 2026-05-10 22:30</div>
+          <div class="detail-meta-item">📡 来源: 后台自动扫描 (post-commit)</div>
+          <div class="detail-meta-item">🔗 关联 commit: 5fe1b7b</div>
+          <div class="detail-meta-item">🏷️ 类型: 🐛 Bug + 🔒 安全</div>
+        </div>
+
+        <!-- Actions -->
+        <div class="detail-actions">
+          <button class="btn-lg btn-approve-lg">✅ 批准修复 — AI 自动修复代码</button>
+          <button class="btn-lg btn-ignore-lg">❌ 忽略 — 标记为已知风险</button>
+          <button class="btn-lg btn-discuss-lg">💬 讨论 — 在 Chat 中讨论方案</button>
+          <button class="btn-lg btn-locate-lg">📍 定位 — 在代码中查看</button>
+        </div>
+
+        <!-- Related -->
+        <div class="related-list" style="margin-top:24px;padding-top:20px;border-top:1px solid #e2e8f0">
+          <div class="detail-label">🔗 相关审查项</div>
+          <div class="related-item">
+            <div class="related-severity" style="background:#d97706"></div>
+            <div class="related-title">callViaCLI 缺少超时控制</div>
+            <div class="related-file">aiProvider.ts:112</div>
+          </div>
+          <div class="related-item">
+            <div class="related-severity" style="background:#2563eb"></div>
+            <div class="related-title">API 响应未校验结构</div>
+            <div class="related-file">aiProvider.ts:95</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

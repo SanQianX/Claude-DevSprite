@@ -47,10 +47,13 @@ git commit → 检测器捕获 → AI 分析 → 生成文档 → Web Dashboard 
 ### 多 Agent 团队系统
 
 - **三角色架构**：Lead（架构决策）、Dev（代码实现）、Test（质量验证）
-- **实时聊天**：通过 SSE 流式推送 Agent 执行状态
+- **实时聊天**：WebSocket 双向通信，支持会话管理与消息持久化
 - **技能系统**：Agent 可配置 Skills（如 Playwright 自动化测试）
 - **工具权限控制**：每个 Agent 独立的 allowed/disallowed tools 列表
 - **任务队列**：支持多项目并行执行
+- **会话管理**：创建/切换/删除会话，消息历史持久化
+- **思考过程展示**：实时展示 Agent 思考过程，支持折叠/展开
+- **工具调用卡片**：ToolCard 组件可视化展示工具调用结果
 
 ### Web Dashboard
 
@@ -124,22 +127,26 @@ export ANTHROPIC_BASE_URL="https://your-api-endpoint"
 ### 启动
 
 ```bash
-# 使用守护进程启动（推荐）
-npm run daemon:start
-
-# 查看运行状态
-npm run daemon:status
-
-# 重启
-npm run daemon:restart
-
-# 停止
-npm run daemon:stop
+# 一键构建前端+后端并启动（推荐）
+npm run start:all
 ```
 
 启动后打开浏览器访问 `http://localhost:38888`。
 
-### 前端开发模式
+#### 常用命令
+
+```bash
+npm run start:all       # 构建全部 + 启动守护进程
+npm run daemon:start    # 仅启动守护进程（需先构建）
+npm run daemon:stop     # 停止守护进程
+npm run daemon:restart  # 重启守护进程
+npm run daemon:status   # 查看运行状态
+npm run build:all       # 仅构建前端+后端，不启动
+npm run build:web       # 仅构建前端
+npm run build           # 仅构建后端
+```
+
+#### 前端开发模式
 
 ```bash
 cd web
@@ -193,9 +200,12 @@ Claude-DevSprite/
 │   │   └── index.ts            # 模块入口
 │   ├── services/               # 业务服务
 │   │   └── projectDiscovery.ts # 项目自动发现
-│   ├── worker/                 # Express HTTP Server
-│   │   ├── server.ts           # 服务入口
+│   ├── worker/                 # Express HTTP Server + WebSocket
+│   │   ├── server.ts           # 服务入口（HTTP + WebSocket）
 │   │   ├── index.ts            # Worker 启动
+│   │   ├── wsServer.ts         # WebSocket 服务器
+│   │   ├── wsHandler.ts        # WebSocket 消息处理器
+│   │   ├── sessionManager.ts   # 会话管理器
 │   │   ├── db.ts               # SQLite 数据库
 │   │   ├── taskQueue.ts        # 任务队列
 │   │   ├── sseBroadcaster.ts   # SSE 实时推送
@@ -203,7 +213,8 @@ Claude-DevSprite/
 │   │   ├── detectorRegistry.ts # 检测器注册
 │   │   ├── routes/             # API 路由模块
 │   │   │   ├── index.ts        # 路由注册
-│   │   │   ├── projects.ts     # 项目管理 API
+│   │   │   ├── projects.ts     # 项目管理 API + 文件系统浏览
+│   │   │   ├── sessions.ts     # 会话 REST API
 │   │   │   ├── files.ts        # 文件操作 API
 │   │   │   ├── search.ts       # 搜索 API
 │   │   │   ├── git.ts          # Git 操作 API
@@ -228,13 +239,14 @@ Claude-DevSprite/
 ├── web/                        # Vue 3 前端
 │   ├── src/
 │   │   ├── api/                # API 客户端
-│   │   │   ├── client.ts       # HTTP 客户端封装
+│   │   │   ├── client.ts       # HTTP 客户端封装（含 unwrap 工具函数）
+│   │   │   ├── websocket.ts    # WebSocket 客户端（自动重连、心跳、消息队列）
 │   │   │   ├── projects.ts     # 项目 API
 │   │   │   ├── files.ts        # 文件 API
 │   │   │   ├── search.ts       # 搜索 API
 │   │   │   ├── analysis.ts     # 分析 API
 │   │   │   ├── logs.ts         # 日志 API
-│   │   │   ├── teams.ts        # 团队 API（含 Chat）
+│   │   │   ├── teams.ts        # 团队 API
 │   │   │   └── config.ts       # 配置 API
 │   │   ├── views/              # 页面组件
 │   │   │   ├── HomePage.vue    # 首页（项目表格 + 控制台面板）
@@ -243,7 +255,7 @@ Claude-DevSprite/
 │   │   │   ├── DocumentView.vue # 文档浏览
 │   │   │   ├── SourceView.vue  # 源码预览
 │   │   │   ├── SearchResults.vue # 搜索结果
-│   │   │   ├── DevChatView.vue # 开发聊天（Agent 协作）
+│   │   │   ├── DevChatView.vue # 开发聊天（WebSocket + 会话管理）
 │   │   │   ├── SettingsView.vue # 系统设置
 │   │   │   └── LogsView.vue    # 日志页面（旧版，已废弃）
 │   │   ├── components/         # UI 组件
@@ -254,20 +266,26 @@ Claude-DevSprite/
 │   │   │   ├── home/           # 首页组件
 │   │   │   │   ├── ProjectList.vue  # 项目表格
 │   │   │   │   ├── ProjectCard.vue  # 项目行（含状态指示）
+│   │   │   │   ├── AddProjectModal.vue # 添加项目弹窗（含文件夹浏览器）
 │   │   │   │   ├── ConsolePanel.vue # 控制台面板
 │   │   │   │   ├── LogFilters.vue   # 日志级别过滤
 │   │   │   │   └── LogOutput.vue    # 日志输出区
 │   │   │   ├── chat/           # 聊天组件
 │   │   │   │   ├── ChatInput.vue    # 聊天输入
 │   │   │   │   ├── ChatMessage.vue  # 消息气泡
-│   │   │   │   └── ChatMessageList.vue # 消息列表
+│   │   │   │   ├── ChatMessageList.vue # 消息列表（含思考状态）
+│   │   │   │   └── ToolCard.vue     # 工具调用结果卡片
+│   │   │   ├── session/        # 会话组件
+│   │   │   │   ├── SessionSidebar.vue # 会话侧边栏
+│   │   │   │   └── NewSessionDialog.vue # 新建会话对话框
 │   │   │   ├── teams/          # 团队组件
 │   │   │   │   └── TeamStatusPanel.vue # 团队状态面板
 │   │   │   ├── common/         # 通用组件
 │   │   │   │   ├── SearchBar.vue  # 搜索框
 │   │   │   │   ├── Breadcrumb.vue # 面包屑
 │   │   │   │   ├── LoadingSpinner.vue # 加载动画
-│   │   │   │   └── EmptyState.vue  # 空状态
+│   │   │   │   ├── EmptyState.vue  # 空状态
+│   │   │   │   └── FolderBrowser.vue # 文件夹浏览器
 │   │   │   ├── tree/           # 文件树组件
 │   │   │   │   ├── FileTree.vue
 │   │   │   │   └── FileTreeNode.vue
@@ -281,7 +299,7 @@ Claude-DevSprite/
 │   │   │   ├── analysis.ts     # 分析进度 + SSE 连接
 │   │   │   ├── logs.ts         # 日志状态 + 解析 + 过滤
 │   │   │   ├── teams.ts        # 团队配置与状态
-│   │   │   ├── chat.ts         # 聊天消息
+│   │   │   ├── chat.ts         # 聊天消息（WebSocket 通信 + 会话管理）
 │   │   │   └── ui.ts           # UI 偏好
 │   │   ├── composables/        # Vue 组合式函数
 │   │   │   ├── useBreadcrumb.ts
@@ -292,7 +310,8 @@ Claude-DevSprite/
 │   │   ├── router/             # Vue Router
 │   │   │   └── index.ts
 │   │   └── types/              # TypeScript 类型定义
-│   │       └── index.ts
+│   │       ├── index.ts
+│   │       └── session.ts      # 会话与消息类型
 │   └── vite.config.ts          # Vite 配置
 ├── knowledge/                  # 生成的知识库文档
 ├── tests/                      # 后端测试
@@ -319,6 +338,7 @@ Claude-DevSprite/
 |------|------|------|
 | GET | `/api/health` | 健康检查 |
 | GET | `/api/stream` | SSE 实时推送（分析进度） |
+| WS | `ws://localhost:38888/ws` | WebSocket 实时通信（聊天、会话） |
 
 ### 项目管理
 
@@ -329,6 +349,13 @@ Claude-DevSprite/
 | GET | `/api/projects/:name/analysis-status` | 分析状态 |
 | POST | `/api/projects/:name/analyze` | 触发全量分析 |
 | GET | `/api/projects/:name/tree` | 项目文件树 |
+
+### 文件系统浏览
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/filesystem/drives` | 获取系统磁盘列表 |
+| GET | `/api/filesystem/browse?path=` | 浏览本地目录 |
 
 ### 文件与文档
 
@@ -358,12 +385,25 @@ Claude-DevSprite/
 | POST | `/api/teams/:name/abort` | 中止团队执行 |
 | POST | `/api/teams/abort-all` | 中止所有团队 |
 
-### 聊天
+### 会话管理
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/chat/send` | 发送聊天消息 |
-| GET | `/api/chat/stream` | SSE 聊天流 |
+| GET | `/api/sessions?projectPath=` | 获取会话列表 |
+| POST | `/api/sessions` | 创建新会话 |
+| GET | `/api/sessions/:id` | 获取会话详情（含消息历史） |
+| DELETE | `/api/sessions/:id` | 删除会话 |
+| POST | `/api/sessions/:id/messages` | 向会话发送消息 |
+
+### 聊天（WebSocket）
+
+实时通信通过 WebSocket 连接 `ws://localhost:38888/ws` 实现，支持：
+
+- 认证握手（`auth` / `auth.result`）
+- 会话消息收发（`session.create` / `session.send` / `session.message`）
+- 会话列表同步（`session.list`）
+- Agent 思考状态推送（`thinking` / `thinking_delta`）
+- 工具调用结果推送（`tool_call` / `tool_result`）
 
 ### 系统管理
 
@@ -384,6 +424,7 @@ Claude-DevSprite/
 |------|------|
 | TypeScript + Node.js | 运行时与语言 |
 | Express | HTTP Server |
+| ws | WebSocket 实时通信 |
 | sql.js | SQLite WASM，零原生编译依赖 |
 | simple-git | Git 操作封装 |
 | chokidar | 文件系统监控 |
@@ -427,11 +468,11 @@ Claude-DevSprite/
 ### 架构
 
 ```
-用户请求 → TeamManager → TeamExecutor → Claude Agent
-                ↓                ↓
-           TaskQueue       文件协议通信
-                ↓                ↓
-           状态追踪          SSE 推送
+用户请求 → WebSocket → SessionManager → TeamExecutor → Claude CLI
+                ↓              ↓                ↓
+           会话管理        消息持久化       子进程执行
+                ↓              ↓                ↓
+           状态追踪        实时推送        stream-json
 ```
 
 ### 团队角色

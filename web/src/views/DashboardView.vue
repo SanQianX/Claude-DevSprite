@@ -109,7 +109,13 @@
         <div v-else-if="filteredReviews.length === 0" class="empty-reviews">
           无匹配的审查项
         </div>
-        <div v-for="review in filteredReviews" :key="review.id" class="review-item">
+        <div
+          v-for="review in filteredReviews"
+          :key="review.id"
+          class="review-item"
+          :class="{ 'review-item-expanded': selectedReviewId === review.id }"
+          @click="toggleReviewDetail(review.id)"
+        >
           <div class="review-top">
             <span class="severity-badge" :class="'severity-' + review.severity.toLowerCase()">
               {{ review.severity }}
@@ -121,11 +127,23 @@
           </div>
           <div class="review-suggestion">{{ review.suggestion }}</div>
           <div class="review-footer">
-            <div class="review-time">{{ review.time }}</div>
+            <div class="review-time">{{ formatTime(review.created_at) }}</div>
             <div class="review-actions">
-              <button class="btn btn-approve" @click="approveReview(review.id)">批准修复</button>
-              <button class="btn btn-ignore" @click="ignoreReview(review.id)">忽略</button>
-              <button class="btn btn-locate" @click="locateReview(review)">定位</button>
+              <button class="btn btn-approve" @click.stop="approveReview(review.id)">批准修复</button>
+              <button class="btn btn-ignore" @click.stop="ignoreReview(review.id)">忽略</button>
+              <button class="btn btn-discuss" @click.stop="discussReview(review)">讨论</button>
+              <button class="btn btn-locate" @click.stop="locateReview(review)">定位</button>
+            </div>
+          </div>
+          <!-- Expanded Detail -->
+          <div v-if="selectedReviewId === review.id" class="review-detail-expanded" @click.stop>
+            <div class="detail-section" v-if="review.suggestion">
+              <div class="detail-label">AI 建议详情</div>
+              <div class="code-block">{{ review.suggestion }}</div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">位置</div>
+              <div class="code-block">{{ review.location || '未指定' }}</div>
             </div>
           </div>
         </div>
@@ -163,6 +181,7 @@ const showAddTask = ref(false)
 const newTaskTitle = ref('')
 const statusFilter = ref('all')
 const severityFilter = ref('all')
+const selectedReviewId = ref<number | null>(null)
 
 const projectColor = ref('#f97316')
 const projectPath = ref('')
@@ -233,11 +252,45 @@ function locateReview(review: Review) {
   const filePath = colonIndex > -1 ? location.substring(0, colonIndex) : location
   const lineNum = colonIndex > -1 ? parseInt(location.substring(colonIndex + 1)) : undefined
 
-  // Navigate to source view with file path
+  // Navigate to workspace with code panel showing the file
   router.push({
-    path: `/project/${props.projectName}/source`,
-    query: { path: filePath, line: lineNum?.toString() }
+    path: `/project/${props.projectName}`,
+    query: {
+      tab: 'workspace',
+      code: filePath,
+      line: lineNum?.toString() || '',
+      panels: 'code,chat',
+    }
   })
+}
+
+function discussReview(review: Review) {
+  router.push({
+    path: `/project/${props.projectName}`,
+    query: {
+      tab: 'workspace',
+      discuss: review.id.toString(),
+      panels: 'chat',
+    }
+  })
+}
+
+function toggleReviewDetail(reviewId: number) {
+  selectedReviewId.value = selectedReviewId.value === reviewId ? null : reviewId
+}
+
+function formatTime(dateStr: string): string {
+  if (!dateStr) return ''
+  try {
+    return new Date(dateStr).toLocaleString('zh-CN', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return dateStr
+  }
 }
 
 async function addTask() {
@@ -516,6 +569,16 @@ onMounted(async () => {
 .review-item {
   padding: 16px 20px;
   border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  transition: background 150ms;
+}
+
+.review-item:hover {
+  background: #f8fafc;
+}
+
+.review-item-expanded {
+  background: #f8fafc;
 }
 
 .review-item:last-child { border-bottom: none; }
@@ -568,6 +631,43 @@ onMounted(async () => {
 .review-time { font-size: 11px; color: #94a3b8; }
 .review-actions { display: flex; gap: 8px; }
 
+.review-detail-expanded {
+  margin-top: 12px;
+  padding: 12px;
+  margin-left: 52px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.detail-section {
+  margin-bottom: 10px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.code-block {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 12px;
+  color: #1e293b;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
 .btn {
   padding: 5px 12px;
   border-radius: 6px;
@@ -583,6 +683,8 @@ onMounted(async () => {
 .btn-ignore:hover { background: #fee2e2; }
 .btn-locate { background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe; }
 .btn-locate:hover { background: #ede9fe; }
+.btn-discuss { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+.btn-discuss:hover { background: #dbeafe; }
 
 /* Dialog */
 .dialog-overlay {

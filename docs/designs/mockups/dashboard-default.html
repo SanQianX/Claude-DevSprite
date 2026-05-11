@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard - 默认状态</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; }
+.mockup { width: 1200px; margin: 40px auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.12); }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: #1a1a2e; color: #fff; }
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-title { font-size: 16px; font-weight: 600; }
+.header-tabs { display: flex; gap: 4px; }
+.header-tab { padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; color: #a0a0b0; }
+.header-tab.active { background: #3b82f6; color: #fff; }
+.search-box { background: #2a2a3e; border: 1px solid #3a3a4e; border-radius: 6px; padding: 6px 12px; color: #888; font-size: 13px; width: 200px; }
+
+/* Content */
+.content { padding: 24px; }
+
+/* Project Info */
+.project-info { display: flex; align-items: center; gap: 16px; padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 24px; }
+.project-badge { width: 56px; height: 56px; background: #f97316; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 28px; font-weight: 700; }
+.project-meta h2 { font-size: 20px; font-weight: 700; color: #1e293b; }
+.project-meta p { font-size: 13px; color: #64748b; margin-top: 4px; font-family: monospace; }
+.project-stats { margin-left: auto; display: flex; gap: 24px; }
+.stat-item { text-align: center; }
+.stat-value { font-size: 24px; font-weight: 700; color: #1e293b; }
+.stat-label { font-size: 12px; color: #94a3b8; }
+
+/* Two Column Layout */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+
+/* Task List */
+.section { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+.section-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
+.section-title { font-size: 15px; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 8px; }
+.section-body { padding: 16px 20px; }
+
+/* Stats Card */
+.stats-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; }
+.progress-bar { height: 8px; background: #e2e8f0; border-radius: 4px; margin: 12px 0; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #22c55e); border-radius: 4px; width: 67%; }
+.stats-detail { font-size: 13px; color: #64748b; line-height: 1.8; }
+
+/* Task Group */
+.task-group { margin-bottom: 16px; }
+.task-group-header { display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: 13px; font-weight: 600; color: #475569; cursor: pointer; }
+.task-group-header .arrow { font-size: 10px; color: #94a3b8; }
+.task-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; margin: 4px 0; border-radius: 8px; background: #f8fafc; }
+.task-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+.dot-blue { background: #3b82f6; }
+.dot-green { background: #22c55e; }
+.dot-gray { background: #94a3b8; }
+.task-info { flex: 1; }
+.task-title { font-size: 14px; font-weight: 500; color: #1e293b; }
+.task-meta { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+.add-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; margin-top: 8px; }
+
+/* Review Queue */
+.review-section { margin-bottom: 0; }
+.review-filters { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
+.filter-select { padding: 4px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; color: #475569; background: #fff; }
+.review-counts { margin-left: auto; display: flex; gap: 16px; font-size: 12px; color: #64748b; }
+.review-counts span { font-weight: 600; }
+
+.review-item { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; }
+.review-item:last-child { border-bottom: none; }
+.review-top { display: flex; align-items: flex-start; gap: 12px; }
+.severity-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.severity-high { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.severity-med { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.severity-low { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.review-title { font-size: 14px; font-weight: 600; color: #1e293b; }
+.review-location { font-size: 12px; color: #3b82f6; font-family: monospace; margin-top: 4px; }
+.review-desc { font-size: 13px; color: #64748b; margin: 8px 0; padding-left: 52px; }
+.review-suggestion { font-size: 12px; color: #475569; padding: 8px 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; margin: 8px 0 8px 52px; }
+.review-suggestion::before { content: "💡 AI 建议: "; font-weight: 600; color: #16a34a; }
+.review-footer { display: flex; align-items: center; justify-content: space-between; padding-left: 52px; margin-top: 8px; }
+.review-time { font-size: 11px; color: #94a3b8; }
+.review-actions { display: flex; gap: 8px; }
+.btn { padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid; }
+.btn-approve { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.btn-ignore { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+.btn-discuss { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+.btn-locate { background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe; }
+</style>
+</head>
+<body>
+<div class="mockup">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <span style="font-size:20px">◂</span>
+      <span class="header-title">Claude-DevSprite</span>
+      <div class="header-tabs">
+        <div class="header-tab active">📊 Dashboard</div>
+        <div class="header-tab">💻 Workspace</div>
+      </div>
+    </div>
+    <div class="search-box">🔍 搜索知识库...</div>
+  </div>
+
+  <div class="content">
+    <!-- Project Info -->
+    <div class="project-info">
+      <div class="project-badge">C</div>
+      <div class="project-meta">
+        <h2>Claude-DevSprite</h2>
+        <p>D:\Claude-DevSprite</p>
+      </div>
+      <div class="project-stats">
+        <div class="stat-item">
+          <div class="stat-value">7</div>
+          <div class="stat-label">文档</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">342</div>
+          <div class="stat-label">源文件</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">17</div>
+          <div class="stat-label">分析次数</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">2h</div>
+          <div class="stat-label">上次分析</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Two Column: Tasks + Stats -->
+    <div class="two-col">
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">📋 项目计划</div>
+        </div>
+        <div class="section-body">
+          <!-- In Progress -->
+          <div class="task-group">
+            <div class="task-group-header">
+              <span class="arrow">▸</span>
+              🔵 进行中 (3)
+            </div>
+            <div class="task-item">
+              <div class="task-dot dot-blue"></div>
+              <div class="task-info">
+                <div class="task-title">WebSocket 实时聊天优化</div>
+                <div class="task-meta">优先级: 高 | 预计: 3天</div>
+              </div>
+            </div>
+            <div class="task-item">
+              <div class="task-dot dot-blue"></div>
+              <div class="task-info">
+                <div class="task-title">多面板工作台布局</div>
+                <div class="task-meta">优先级: 高 | 预计: 5天</div>
+              </div>
+            </div>
+            <div class="task-item">
+              <div class="task-dot dot-blue"></div>
+              <div class="task-info">
+                <div class="task-title">AI 自动代码审查</div>
+                <div class="task-meta">优先级: 中 | 预计: 2天</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Done -->
+          <div class="task-group">
+            <div class="task-group-header">
+              <span class="arrow">▸</span>
+              ✅ 已完成 (4)
+            </div>
+            <div class="task-item">
+              <div class="task-dot dot-green"></div>
+              <div class="task-info">
+                <div class="task-title">Dashboard 重新设计</div>
+                <div class="task-meta">完成于: May 10</div>
+              </div>
+            </div>
+            <div class="task-item">
+              <div class="task-dot dot-green"></div>
+              <div class="task-info">
+                <div class="task-title">文件系统浏览器</div>
+                <div class="task-meta">完成于: May 10</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Backlog -->
+          <div class="task-group">
+            <div class="task-group-header">
+              <span class="arrow">▸</span>
+              📥 待开发 (2)
+            </div>
+          </div>
+
+          <div class="add-btn">+ 添加任务</div>
+        </div>
+      </div>
+
+      <div class="stats-card">
+        <div class="section-title" style="margin-bottom:16px">📊 进度统计</div>
+        <div style="text-align:center;padding:20px 0">
+          <div style="font-size:48px;font-weight:800;color:#1e293b">67%</div>
+          <div style="font-size:14px;color:#64748b;margin-top:4px">6 / 9 完成</div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill"></div></div>
+        <div class="stats-detail">
+          <div>🔵 进行中: 3 个任务</div>
+          <div>✅ 本周完成: +3</div>
+          <div>📥 待开发: 2 个任务</div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0">
+            <div style="font-weight:600;color:#475569">最近活动</div>
+            <div style="margin-top:8px;font-size:12px">
+              <div>✅ "文件系统浏览器" 完成 (2h ago)</div>
+              <div>🔵 "多面板工作台" 开始 (5h ago)</div>
+              <div>📝 新增任务 "AI 自动代码审查" (1d ago)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Review Queue -->
+    <div class="section review-section">
+      <div class="section-header">
+        <div class="section-title">🔍 AI 审查队列</div>
+      </div>
+      <div class="review-filters">
+        <select class="filter-select"><option>全部</option></select>
+        <select class="filter-select"><option>严重性 ▾</option></select>
+        <select class="filter-select"><option>类型 ▾</option></select>
+        <div class="review-counts">
+          待审批: <span>5</span> | 已批准: <span>12</span> | 已忽略: <span>2</span>
+        </div>
+      </div>
+
+      <!-- Review Item HIGH -->
+      <div class="review-item">
+        <div class="review-top">
+          <span class="severity-badge severity-high">HIGH</span>
+          <div>
+            <div class="review-title">未处理的 API 密钥异常可能导致进程崩溃</div>
+            <div class="review-location">📍 src/analyzer/aiProvider.ts:87</div>
+          </div>
+        </div>
+        <div class="review-suggestion">添加 try-catch 并实现降级到 CLI 模式</div>
+        <div class="review-footer">
+          <div class="review-time">📅 2026-05-10 22:30 | 来源: 后台自动扫描</div>
+          <div class="review-actions">
+            <button class="btn btn-approve">✅ 批准修复</button>
+            <button class="btn btn-ignore">❌ 忽略</button>
+            <button class="btn btn-discuss">💬 讨论</button>
+            <button class="btn btn-locate">📍 定位</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Review Item MED -->
+      <div class="review-item">
+        <div class="review-top">
+          <span class="severity-badge severity-med">MED</span>
+          <div>
+            <div class="review-title">buildFileTree 递归深度无限制，大项目可能导致栈溢出</div>
+            <div class="review-location">📍 src/worker/routes/files.ts:142</div>
+          </div>
+        </div>
+        <div class="review-suggestion">添加 maxDepth 参数限制递归层级</div>
+        <div class="review-footer">
+          <div class="review-time">📅 2026-05-10 22:30 | 来源: 后台自动扫描</div>
+          <div class="review-actions">
+            <button class="btn btn-approve">✅ 批准修复</button>
+            <button class="btn btn-ignore">❌ 忽略</button>
+            <button class="btn btn-discuss">💬 讨论</button>
+            <button class="btn btn-locate">📍 定位</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Review Item MED 2 -->
+      <div class="review-item">
+        <div class="review-top">
+          <span class="severity-badge severity-med">MED</span>
+          <div>
+            <div class="review-title">内存中 Map 无大小限制，长期运行可能 OOM</div>
+            <div class="review-location">📍 src/knowledge/relationEngine.ts:45</div>
+          </div>
+        </div>
+        <div class="review-suggestion">添加 LRU 缓存或定期清理过期条目</div>
+        <div class="review-footer">
+          <div class="review-time">📅 2026-05-10 21:15 | 来源: 后台自动扫描</div>
+          <div class="review-actions">
+            <button class="btn btn-approve">✅ 批准修复</button>
+            <button class="btn btn-ignore">❌ 忽略</button>
+            <button class="btn btn-discuss">💬 讨论</button>
+            <button class="btn btn-locate">📍 定位</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Review Item LOW -->
+      <div class="review-item">
+        <div class="review-top">
+          <span class="severity-badge severity-low">LOW</span>
+          <div>
+            <div class="review-title">WebSocket 心跳间隔硬编码，建议可配置化</div>
+            <div class="review-location">📍 src/worker/wsHandler.ts:23</div>
+          </div>
+        </div>
+        <div class="review-suggestion">从 config.ts 读取 heartbeatInterval</div>
+        <div class="review-footer">
+          <div class="review-time">📅 2026-05-10 21:00 | 来源: 后台自动扫描</div>
+          <div class="review-actions">
+            <button class="btn btn-approve">✅ 批准修复</button>
+            <button class="btn btn-ignore">❌ 忽略</button>
+            <button class="btn btn-discuss">💬 讨论</button>
+            <button class="btn btn-locate">📍 定位</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

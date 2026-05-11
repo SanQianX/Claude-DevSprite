@@ -1,9 +1,9 @@
 @echo off
-set "ANTHROPIC_AUTH_TOKEN=tp-cwfrlf4o5p7jcfo1ouzn34f74hcetd2ieg2e2kx6pf7cgse8"
+set "ANTHROPIC_AUTH_TOKEN=tp-co7hqo7902z08bm9wetz3aqobllj8johfaw1o862lba8npq0"
 set "ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic"
 set "ANTHROPIC_MODEL=mimo-v2.5"
 set "ANTHROPIC_DEFAULT_SONNET_MODEL=mimo-v2.5"
 set "ANTHROPIC_DEFAULT_OPUS_MODEL=mimo-v2.5"
 set "ANTHROPIC_DEFAULT_HAIKU_MODEL=mimo-v2.5-pro"
-set "ANTHROPIC_SMALL_FAST_MODEL=mimo-v2.5"
-node "D:\Code\Claude-DevSprite\dist\worker\index.js"
+set "ANTHROPIC_SMALL_FAST_MODEL=mimo-v2.5-pro"
+node "D:\Claude-DevSprite\dist\worker\index.js"

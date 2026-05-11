@@ -67,8 +67,8 @@ export interface Config {
 
 const getDefaultConfig = (): Config => ({
   server: {
-    port: 38888,
-    host: 'localhost',
+    port: parseInt(process.env.PORT || '38888', 10),
+    host: process.env.HOST || 'localhost',
   },
   knowledge: {
     directoryName: 'knowledge',

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>v1.1.1 — UI 设计稿索引</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+.container { max-width: 900px; margin: 0 auto; padding: 60px 24px; }
+h1 { font-size: 32px; font-weight: 800; margin-bottom: 8px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.subtitle { font-size: 16px; color: #94a3b8; margin-bottom: 48px; }
+.section { margin-bottom: 40px; }
+.section-title { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #1e293b; }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; cursor: pointer; transition: all 0.2s; text-decoration: none; color: inherit; display: block; }
+.card:hover { border-color: #3b82f6; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15); }
+.card-icon { font-size: 32px; margin-bottom: 12px; }
+.card-title { font-size: 16px; font-weight: 600; color: #f1f5f9; margin-bottom: 6px; }
+.card-desc { font-size: 13px; color: #94a3b8; line-height: 1.6; }
+.card-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; margin-top: 12px; margin-right: 4px; }
+.tag-home { background: #14532d; color: #4ade80; }
+.tag-dashboard { background: #1e3a5f; color: #60a5fa; }
+.tag-workspace { background: #2d1b69; color: #a78bfa; }
+.tag-new { background: #451a03; color: #fb923c; }
+.card-full { grid-column: 1 / -1; }
+.note { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 20px; margin-top: 32px; }
+.note-title { font-size: 14px; font-weight: 600; color: #f1f5f9; margin-bottom: 8px; }
+.note-text { font-size: 13px; color: #94a3b8; line-height: 1.7; }
+.note-text code { background: #334155; padding: 1px 6px; border-radius: 4px; font-size: 12px; color: #e2e8f0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>DevSprite UI 设计稿</h1>
+  <p class="subtitle">Claude-DevSprite 界面重新设计 — 各状态 UI 示意图</p>
+
+  <div class="section">
+    <div class="section-title">🏠 首页设计 (v1.1.1 新增)</div>
+    <div class="cards">
+      <a class="card card-full" href="home-redesign.html">
+        <div class="card-icon">🏠</div>
+        <div class="card-title">首页重新设计</div>
+        <div class="card-desc">
+          移除左侧边栏，新增 Tokens 消费统计条（浅色融合式），通用搜索框，精简项目表格，可折叠 Console 日志面板（保留原版设计：Auto-refresh + LEVEL 过滤器 + SSE 状态）。
+        </div>
+        <span class="card-tag tag-home">首页</span>
+        <span class="card-tag tag-new">v1.1.1</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">📊 Dashboard 模式</div>
+    <div class="cards">
+      <a class="card card-full" href="dashboard-default.html">
+        <div class="card-icon">📊</div>
+        <div class="card-title">Dashboard 默认状态</div>
+        <div class="card-desc">
+          项目信息栏 + 项目计划（任务列表：进行中/已完成/待开发）+ 进度统计 + AI 审查队列（待审批列表，含严重性标记和操作按钮）
+        </div>
+        <span class="card-tag tag-dashboard">Dashboard</span>
+        <span class="card-tag tag-new">新功能</span>
+      </a>
+      <a class="card" href="dashboard-review-detail.html">
+        <div class="card-icon">🔍</div>
+        <div class="card-title">审查项详情展开</div>
+        <div class="card-desc">
+          点击审查项后展开详情：问题描述、AI 修复建议（Diff 视图）、元信息、操作按钮、相关审查项
+        </div>
+        <span class="card-tag tag-dashboard">Dashboard</span>
+      </a>
+      <a class="card" href="dashboard-default.html#add-task">
+        <div class="card-icon">➕</div>
+        <div class="card-title">添加任务对话框</div>
+        <div class="card-desc">
+          点击"+ 添加任务"弹出的对话框：标题、描述、状态、优先级、预估工期
+        </div>
+        <span class="card-tag tag-dashboard">Dashboard</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">💻 Workspace 模式</div>
+    <div class="cards">
+      <a class="card card-full" href="workspace-triple.html">
+        <div class="card-icon">📐</div>
+        <div class="card-title">三面板模式 (Doc + Code + Chat)</div>
+        <div class="card-desc">
+          完整的三栏布局：左侧文件树（知识库/源码 Tab 切换）、文档面板（含 source 链接）、代码面板（语法高亮 + 行号 + 高亮行）、对话面板。
+          文档中的 [source:path:line] 链接点击后自动定位到代码面板对应行。
+        </div>
+        <span class="card-tag tag-workspace">Workspace</span>
+        <span class="card-tag tag-new">核心</span>
+      </a>
+      <a class="card" href="workspace-doc-chat.html">
+        <div class="card-icon">📄</div>
+        <div class="card-title">双面板 (Doc + Chat)</div>
+        <div class="card-desc">
+          关闭 Code 面板后的布局。点击文档中的 source 链接会弹出代码预览浮层，并提示可自动打开 Code 面板。
+        </div>
+        <span class="card-tag tag-workspace">Workspace</span>
+      </a>
+      <a class="card" href="workspace-code-chat.html">
+        <div class="card-icon">📁</div>
+        <div class="card-title">双面板 (Code + Chat)</div>
+        <div class="card-desc">
+          关闭 Doc 面板后的布局。左侧自动切换到源码文件树，代码面板底部显示关联文档链接。
+        </div>
+        <span class="card-tag tag-workspace">Workspace</span>
+      </a>
+      <a class="card card-full" href="workspace-only-chat.html">
+        <div class="card-icon">💬</div>
+        <div class="card-title">单面板 (仅 Chat)</div>
+        <div class="card-desc">
+          关闭 Doc 和 Code 面板后的全屏对话模式。支持附带文档/代码上下文的附件栏。
+        </div>
+        <span class="card-tag tag-workspace">Workspace</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">🧠 开发记忆 (v1.1.0 新增)</div>
+    <div class="cards">
+      <a class="card card-full" href="workspace-with-memory.html">
+        <div class="card-icon">🧠</div>
+        <div class="card-title">带开发记忆的三面板</div>
+        <div class="card-desc">
+          Chat 面板集成开发记忆功能：自动加载相关知识文档、历史会话摘要、关键决策、审查队列项。
+          记忆横幅显示所有自动加载的上下文，可展开查看详情。每次开发都有延续性，不再是孤立的会话。
+        </div>
+        <span class="card-tag tag-workspace">Workspace</span>
+        <span class="card-tag tag-new">v1.1.0</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="note">
+    <div class="note-title">💡 使用说明</div>
+    <div class="note-text">
+      点击任意卡片查看对应的 UI 示意图。所有示意图均为 HTML 文件，可直接在浏览器中打开查看。<br><br>
+      <strong>设计文档</strong>: <code>docs/designs/project-workspace-design.md</code> (v1.1.1)<br>
+      <strong>示意图目录</strong>: <code>docs/designs/mockups/</code><br>
+      <strong>版本归档</strong>: <code>v1.0.0/</code> <code>v1.1.0/</code> <code>v1.1.1/</code><br><br>
+      各状态之间的切换通过顶部 Toolbar 的面板开关按钮实现。面板宽度支持拖拽调整，双击分隔线恢复均分。
+    </div>
+  </div>
+</div>
+</body>
+</html>

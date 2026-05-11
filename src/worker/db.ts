@@ -295,7 +295,6 @@ export class DatabaseManager {
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_analysis_log_project_created ON analysis_log(project_id, created_at)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_reviews_project_status ON reviews(project_id, status)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_reviews_project_created ON reviews(project_id, created_at)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_session_summaries_project ON session_summaries(project_name)`);
 
     // Session summaries table
     this.db.run(`
@@ -309,6 +308,7 @@ export class DatabaseManager {
         created_at  TEXT NOT NULL
       )
     `);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_session_summaries_project ON session_summaries(project_name)`);
 
     this.save();
     logger.info('Database tables initialized');

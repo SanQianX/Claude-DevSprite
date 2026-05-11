@@ -38,7 +38,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { marked } from 'marked'
+import { marked, Marked, Renderer } from 'marked'
 import DOMPurify from 'dompurify'
 
 const props = withDefaults(defineProps<{
@@ -68,10 +68,10 @@ const loading = ref(false)
 const docBodyRef = ref<HTMLElement | null>(null)
 
 // Local marked instance to avoid global mutation
-const localMarked = new marked.Marked()
+const localMarked = new Marked()
 
 // Custom renderer to convert [source:path:line] to clickable links
-const renderer = new localMarked.Renderer()
+const renderer = new Renderer()
 renderer.paragraph = function (tokens: any) {
   let text = this.parser.parseInline(tokens) as string
   // Replace [source:path:line] patterns with clickable links

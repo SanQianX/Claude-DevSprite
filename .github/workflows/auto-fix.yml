@@ -1,0 +1,76 @@
+name: Overnight Auto-Fix
+
+on:
+  schedule:
+    - cron: '0 14 * * *'   # UTC 14:00 = 北京 22:00
+  workflow_dispatch:     # 允许手动触发
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Install Playwright
+        run: |
+          npm install -D @playwright/test
+          npx playwright install chromium
+
+      - name: Start backend & frontend (background)
+        run: |
+          npm run dev &
+          cd web && npm run dev &
+          sleep 10   # 等待服务启动
+
+      - name: Run auto-fix loop (no limits)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # 创建一个无限循环脚本
+          cat > run_loop.sh << 'EOF'
+          #!/bin/bash
+          while true; do
+            echo "=== Starting new Claude Code session ==="
+            # 调用 Claude Code 处理下一个未完成的 Phase
+            claude code -p "
+              请读取 .claude/auto-fix-plans/task_plan.md，找到第一个未完成的 Phase。
+              执行该 Phase 的所有测试和修复（参考 PROJECT_SCAN.md）。
+              完成后生成中文 commit 并 push。
+              如果所有 Phase 都已完成，输出 'ALL_DONE' 并退出。
+              注意：不要携带任何历史上下文，这是一个全新的会话。
+            " --allowedTools "Read,Write,Edit,Bash" --dangerously-skip-permissions
+            
+            if grep -q "ALL_DONE" /tmp/claude_output; then
+              echo "所有任务完成，退出循环。"
+              break
+            fi
+            echo "等待 10 秒后继续下一 Phase..."
+            sleep 10
+          done
+          EOF
+          chmod +x run_loop.sh
+          ./run_loop.sh
+
+      - name: Create Pull Request
+        if: always()
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "🤖 Auto-Fix: 批量修复页面按钮功能"
+          title: "[Auto-Fix] 自动修复 $(date +'%Y-%m-%d')"
+          body: |
+            本次自动修复基于计划文件夹 `.claude/auto-fix-plans/task_plan.md` 完成。
+            请人工审核变更，确认无误后合并。
+          branch: auto-fix/$(date +'%Y%m%d-%H%M%S')
+          base: main

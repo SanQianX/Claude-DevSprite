@@ -3,15 +3,27 @@
   "version": "0.1.0",
   "description": "Auto-detect Git commits and generate knowledge base docs",
   "main": "dist/worker/index.js",
+  "bin": {
+    "claude-dev-sprite": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "web/dist/",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
+    "build:web": "cd web && npm run build",
+    "build:all": "npm run build:web && npm run build",
     "dev": "tsx --watch src/worker/index.ts",
     "start": "node dist/worker/index.js",
+    "start:all": "npm run build:all && node dev-scripts/daemon.js restart",
     "test": "vitest",
     "daemon:start": "node dev-scripts/daemon.js start",
     "daemon:stop": "node dev-scripts/daemon.js stop",
     "daemon:status": "node dev-scripts/daemon.js status",
-    "daemon:restart": "node dev-scripts/daemon.js restart"
+    "daemon:restart": "node dev-scripts/daemon.js restart",
+    "prepublishOnly": "npm run build:all"
   },
   "keywords": [
     "git",
@@ -32,6 +44,7 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/express": "^4.17.21",
     "@types/node": "^20.11.0",
     "@types/ws": "^8.18.1",

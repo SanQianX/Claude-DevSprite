@@ -5,84 +5,100 @@
       <div class="toolbar-panels">
         <button
           class="panel-toggle"
-          :class="{ active: panels.doc, inactive: !panels.doc }"
+          :class="{ active: showDoc, inactive: !showDoc }"
           @click="togglePanel('doc')"
         >
           <span>📄</span> Doc
         </button>
         <button
           class="panel-toggle"
-          :class="{ active: panels.code, inactive: !panels.code }"
+          :class="{ active: showCode, inactive: !showCode }"
           @click="togglePanel('code')"
         >
           <span>📁</span> Code
         </button>
         <button
           class="panel-toggle"
-          :class="{ active: panels.chat, inactive: !panels.chat }"
+          :class="{ active: showChat, inactive: !showChat }"
           @click="togglePanel('chat')"
         >
           <span>💬</span> Chat
         </button>
       </div>
+      <div class="toolbar-sep"></div>
+      <button class="toolbar-btn" @click="toggleSidebar">
+        <span>{{ showSidebar ? '◀' : '▶' }}</span> 文件树
+      </button>
+      <button class="toolbar-btn" @click="equalizePanels">═ 均分</button>
     </div>
 
-    <!-- Panels Container -->
-    <div class="panels-container" ref="panelsContainer">
-      <!-- Doc Panel -->
-      <div
-        v-if="panels.doc"
-        class="panel"
-        :style="{ width: panelWidths.doc + 'px' }"
-      >
-        <DocPanel
-          :project-name="projectName"
-          :active-doc-path="activeDocPath"
-          @close="togglePanel('doc')"
-          @doc-select="onDocSelect"
-          @source-link-click="onSourceLinkClick"
-        />
-      </div>
+    <!-- Workspace Body -->
+    <div class="workspace-body">
+      <!-- Sidebar -->
+      <FileTreeSidebar
+        v-if="showSidebar"
+        :project-name="projectName"
+        :selected-path="activeFilePath"
+        @file-select="onFileSelect"
+      />
 
-      <!-- Doc/Code Divider -->
-      <div
-        v-if="panels.doc && panels.code"
-        class="panel-divider"
-        @mousedown="startResize('doc-code', $event)"
-      ></div>
+      <!-- Panels Container -->
+      <div class="panels-container" ref="panelsContainer">
+        <!-- Doc Panel -->
+        <div
+          v-if="showDoc"
+          class="panel"
+          :style="{ width: panelWidths.doc + 'px' }"
+        >
+          <DocPanel
+            :project-name="projectName"
+            :active-doc-path="activeDocPath"
+            @close="togglePanel('doc')"
+            @doc-select="onDocSelect"
+            @source-link-click="onSourceLinkClick"
+          />
+        </div>
 
-      <!-- Code Panel -->
-      <div
-        v-if="panels.code"
-        class="panel"
-        :style="{ width: panelWidths.code + 'px' }"
-      >
-        <CodePanel
-          :project-name="projectName"
-          :highlight-path="highlightedSourcePath"
-          :highlight-line="highlightedSourceLine"
-          @close="togglePanel('code')"
-          @file-select="onFileSelect"
-          @doc-navigate="onDocNavigate"
-        />
-      </div>
+        <!-- Doc/Code Divider -->
+        <div
+          v-if="showDoc && showCode"
+          class="panel-divider"
+          @mousedown="startResize('doc-code', $event)"
+        ></div>
 
-      <!-- Code/Chat Divider -->
-      <div
-        v-if="panels.code && panels.chat"
-        class="panel-divider"
-        @mousedown="startResize('code-chat', $event)"
-      ></div>
+        <!-- Code Panel -->
+        <div
+          v-if="showCode"
+          class="panel"
+          :style="{ width: panelWidths.code + 'px' }"
+        >
+          <CodePanel
+            :project-name="projectName"
+            :highlight-path="highlightedSourcePath"
+            :highlight-line="highlightedSourceLine"
+            @close="togglePanel('code')"
+            @file-select="onFileSelect"
+            @doc-navigate="onDocNavigate"
+          />
+        </div>
 
-      <!-- Chat Panel -->
-      <div
-        v-if="panels.chat"
-        class="panel panel-chat"
-      >
-        <ChatPanel
-          :project-name="projectName"
-          @close="togglePanel('chat')"
-        />
+        <!-- Code/Chat Divider -->
+        <div
+          v-if="showCode && showChat"
+          class="panel-divider"
+          @mousedown="startResize('code-chat', $event)"
+        ></div>
+
+        <!-- Chat Panel -->
+        <div
+          v-if="showChat"
+          class="panel panel-chat"
+        >
+          <ChatPanel
+            :project-name="projectName"
+            @close="togglePanel('chat')"
+          />
+        </div>
       </div>
     </div>
 
@@ -91,6 +107,7 @@
       <div class="status-dot"></div>
       <span>{{ projectName }}</span>
       <span v-if="activePanelCount > 1">{{ activePanelCount }} 面板</span>
+      <span v-if="showSidebar">| 文件树已显示</span>
     </div>
   </div>
 </template>
@@ -101,6 +118,7 @@ import { useRoute, useRouter } from 'vue-router'
 import DocPanel from '@/components/workspace/DocPanel.vue'
 import CodePanel from '@/components/workspace/CodePanel.vue'
 import ChatPanel from '@/components/workspace/ChatPanel.vue'
+import FileTreeSidebar from '@/components/workspace/FileTreeSidebar.vue'
 
 const props = defineProps<{
   projectName: string
@@ -109,17 +127,16 @@ const props = defineProps<{
 const route = useRoute()
 const router = useRouter()
 
-const panels = reactive({
-  doc: true,
-  code: true,
-  chat: true,
-})
+const showDoc = ref(false)
+const showCode = ref(false)
+const showChat = ref(true)
 
 const panelWidths = reactive({
   doc: 400,
   code: 400,
 })
 
+const showSidebar = ref(true)
 const panelsContainer = ref<HTMLElement | null>(null)
 
 const highlightedSourcePath = ref('')
@@ -128,7 +145,7 @@ const activeDocPath = ref('')
 const activeFilePath = ref('')
 
 const activePanelCount = computed(() =>
-  Object.values(panels).filter(Boolean).length
+  [showDoc.value, showCode.value, showChat.value].filter(Boolean).length
 )
 
 // Sync URL query params → panel state (on mount / route change)
@@ -138,25 +155,47 @@ function syncFromUrl() {
   if (q.code) activeFilePath.value = q.code as string
   if (q.panels) {
     const names = (q.panels as string).split(',')
-    panels.doc = names.includes('doc')
-    panels.code = names.includes('code')
-    panels.chat = names.includes('chat')
+    showDoc.value = names.includes('doc')
+    showCode.value = names.includes('code')
+    showChat.value = names.includes('chat')
   }
 }
 
 // Sync panel state → URL query params
 function syncToUrl() {
-  const query: Record<string, string> = {}
+  const query: Record<string, string> = { ...route.query } as Record<string, string>
+  query.tab = 'workspace'
   if (activeDocPath.value) query.doc = activeDocPath.value
+  else delete query.doc
   if (activeFilePath.value) query.code = activeFilePath.value
-  const panelNames = Object.entries(panels).filter(([, v]) => v).map(([k]) => k)
+  else delete query.code
+  const panelNames: string[] = []
+  if (showDoc.value) panelNames.push('doc')
+  if (showCode.value) panelNames.push('code')
+  if (showChat.value) panelNames.push('chat')
   if (panelNames.length < 3) query.panels = panelNames.join(',')
+  else delete query.panels
   router.replace({ query })
 }
 
 function togglePanel(name: 'doc' | 'code' | 'chat') {
-  panels[name] = !panels[name]
+  if (name === 'doc') showDoc.value = !showDoc.value
+  else if (name === 'code') showCode.value = !showCode.value
+  else if (name === 'chat') showChat.value = !showChat.value
   syncToUrl()
+}
+
+function toggleSidebar() {
+  showSidebar.value = !showSidebar.value
+}
+
+function equalizePanels() {
+  const openPanels = activePanelCount.value
+  if (openPanels === 0) return
+  const totalWidth = window.innerWidth - (showSidebar.value ? 220 : 0) - 48
+  const eachWidth = Math.floor(totalWidth / openPanels)
+  panelWidths.doc = eachWidth
+  panelWidths.code = eachWidth
 }
 
 function onDocSelect(path: string) {
@@ -166,22 +205,29 @@ function onDocSelect(path: string) {
 
 function onFileSelect(path: string) {
   activeFilePath.value = path
+  // Determine if it's a doc or source file and open appropriate panel
+  const isDoc = path.endsWith('.md') || path.includes('knowledge')
+  if (isDoc) {
+    if (!showDoc.value) showDoc.value = true
+    activeDocPath.value = path
+  } else {
+    if (!showCode.value) showCode.value = true
+    highlightedSourcePath.value = path
+  }
   syncToUrl()
 }
 
 function onDocNavigate(docPath: string) {
-  // Open Doc panel if closed and navigate to the doc
-  if (!panels.doc) {
-    panels.doc = true
+  if (!showDoc.value) {
+    showDoc.value = true
   }
   activeDocPath.value = docPath
   syncToUrl()
 }
 
 function onSourceLinkClick(path: string, line: number) {
-  // Open Code panel if closed and navigate to the file
-  if (!panels.code) {
-    panels.code = true
+  if (!showCode.value) {
+    showCode.value = true
   }
   highlightedSourcePath.value = path
   highlightedSourceLine.value = line
@@ -256,6 +302,31 @@ watch(() => route.query, () => {
   gap: 6px;
 }
 
+.toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: #d1d5db;
+  margin: 0 4px;
+}
+
+.toolbar-btn {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
 .panel-toggle {
   padding: 5px 14px;
   border-radius: 6px;
@@ -281,6 +352,12 @@ watch(() => route.query, () => {
   background: #f9fafb;
   color: #9ca3af;
   border-color: #e5e7eb;
+}
+
+.workspace-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
 }
 
 .panels-container {
