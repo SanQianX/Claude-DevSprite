@@ -1,0 +1,130 @@
+{
+  "currentTask": "devchat-message-flow",
+  "status": "idle",
+  "lastUpdate": "2026-05-11T17:21:21.034Z",
+  "completedTasks": [
+    "tokens-mock-data",
+    "devchat-message-flow"
+  ],
+  "pendingTasks": [
+    "devchat-message-flow",
+    "devchat-session-persistence",
+    "ai-review-scan",
+    "ai-review-fix",
+    "task-sync",
+    "task-status-management",
+    "project-analysis",
+    "config-management",
+    "knowledge-base"
+  ],
+  "taskQueue": [
+    {
+      "id": "devchat-message-flow",
+      "name": "DevChat 消息收发",
+      "priority": "P0",
+      "module": "DevChat",
+      "description": "测试消息发送→AI回复→显示顺序→流式输出",
+      "files": [
+        "web/src/views/DevChatView.vue",
+        "web/src/components/chat/ChatInput.vue",
+        "web/src/components/chat/ChatMessageList.vue",
+        "src/worker/wsHandler.ts"
+      ]
+    },
+    {
+      "id": "devchat-session-persistence",
+      "name": "DevChat 会话持久化",
+      "priority": "P0",
+      "module": "DevChat",
+      "description": "测试切换页面→返回→历史消息保留，刷新页面→消息恢复",
+      "files": [
+        "src/worker/sessionManager.ts",
+        "src/worker/routes/sessions.ts",
+        "web/src/stores/chat.ts"
+      ]
+    },
+    {
+      "id": "ai-review-scan",
+      "name": "AI 审查扫描",
+      "priority": "P0",
+      "module": "Reviews",
+      "description": "测试触发扫描→进度→结果→详情查看",
+      "files": [
+        "src/worker/routes/reviews.ts",
+        "web/src/views/DashboardView.vue"
+      ]
+    },
+    {
+      "id": "ai-review-fix",
+      "name": "AI 审查修复",
+      "priority": "P0",
+      "module": "Reviews",
+      "description": "测试批准修复→执行→进度→结果→状态更新",
+      "files": [
+        "src/worker/routes/reviews.ts",
+        "web/src/stores/dashboard.ts"
+      ]
+    },
+    {
+      "id": "task-sync",
+      "name": "任务创建同步",
+      "priority": "P0",
+      "module": "Tasks",
+      "description": "测试聊天创建任务→列表同步，审查创建任务→列表同步",
+      "files": [
+        "src/worker/routes/tasks.ts",
+        "web/src/stores/dashboard.ts"
+      ]
+    },
+    {
+      "id": "task-status-management",
+      "name": "任务状态管理",
+      "priority": "P1",
+      "module": "Tasks",
+      "description": "测试状态切换→筛选→统计同步",
+      "files": [
+        "src/worker/routes/tasks.ts",
+        "web/src/views/DashboardView.vue"
+      ]
+    },
+    {
+      "id": "project-analysis",
+      "name": "项目分析",
+      "priority": "P1",
+      "module": "Projects",
+      "description": "测试触发分析→进度→结果→日志",
+      "files": [
+        "src/worker/routes/projects.ts",
+        "src/worker/analysisTracker.ts"
+      ]
+    },
+    {
+      "id": "config-management",
+      "name": "配置管理",
+      "priority": "P2",
+      "module": "Settings",
+      "description": "测试保存→测试→生效",
+      "files": [
+        "src/worker/routes/config.ts",
+        "web/src/views/SettingsView.vue"
+      ]
+    },
+    {
+      "id": "knowledge-base",
+      "name": "知识库浏览",
+      "priority": "P2",
+      "module": "Knowledge",
+      "description": "测试文档列表→查看→搜索",
+      "files": [
+        "src/worker/routes/knowledge.ts",
+        "web/src/views/KnowledgeView.vue"
+      ]
+    }
+  ],
+  "statistics": {
+    "totalTasks": 10,
+    "completed": 2,
+    "inProgress": 0,
+    "pending": 8
+  }
+}
