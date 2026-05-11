@@ -97,6 +97,13 @@
             <option value="MED">MED</option>
             <option value="LOW">LOW</option>
           </select>
+          <button
+            v-if="statusFilter !== 'all' || severityFilter !== 'all'"
+            class="filter-reset-btn"
+            @click="resetFilters"
+          >
+            重置筛选
+          </button>
           <div class="review-counts">
             待审批: <span>{{ reviewStats.pending }}</span> |
             已批准: <span>{{ reviewStats.approved }}</span> |
@@ -226,7 +233,9 @@ const reviews = computed(() => dashboardStore.reviews)
 const filteredReviews = computed(() => {
   return reviews.value.filter(r => {
     const statusMatch = statusFilter.value === 'all' || r.status === statusFilter.value
-    const severityMatch = severityFilter.value === 'all' || r.severity === severityFilter.value
+    // 严重性筛选：大小写不敏感比较
+    const severityMatch = severityFilter.value === 'all' ||
+      r.severity?.toUpperCase() === severityFilter.value.toUpperCase()
     return statusMatch && severityMatch
   })
 })
@@ -277,6 +286,11 @@ function discussReview(review: Review) {
 
 function toggleReviewDetail(reviewId: number) {
   selectedReviewId.value = selectedReviewId.value === reviewId ? null : reviewId
+}
+
+function resetFilters() {
+  statusFilter.value = 'all'
+  severityFilter.value = 'all'
 }
 
 function formatTime(dateStr: string): string {
@@ -554,6 +568,20 @@ onMounted(async () => {
   font-size: 12px;
   color: #475569;
   background: #fff;
+}
+
+.filter-reset-btn {
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #dc2626;
+  background: #fef2f2;
+  cursor: pointer;
+}
+
+.filter-reset-btn:hover {
+  background: #fee2e2;
 }
 
 .review-counts {

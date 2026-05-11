@@ -59,12 +59,22 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   async function approveReview(projectName: string, reviewId: number) {
     await dashboardApi.updateReview(projectName, reviewId, { status: 'approved' })
-    reviews.value = reviews.value.filter(r => r.id !== reviewId)
+    // 更新状态而不是删除，这样筛选器和统计才能正确工作
+    const review = reviews.value.find(r => r.id === reviewId)
+    if (review) {
+      review.status = 'approved'
+      review.resolved_at = new Date().toISOString()
+    }
   }
 
   async function ignoreReview(projectName: string, reviewId: number) {
     await dashboardApi.updateReview(projectName, reviewId, { status: 'ignored' })
-    reviews.value = reviews.value.filter(r => r.id !== reviewId)
+    // 更新状态而不是删除，这样筛选器和统计才能正确工作
+    const review = reviews.value.find(r => r.id === reviewId)
+    if (review) {
+      review.status = 'ignored'
+      review.resolved_at = new Date().toISOString()
+    }
   }
 
   return {
