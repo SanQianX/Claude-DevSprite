@@ -93,9 +93,9 @@
           </select>
           <select class="filter-select" v-model="severityFilter">
             <option value="all">严重性</option>
-            <option value="HIGH">HIGH</option>
-            <option value="MED">MED</option>
-            <option value="LOW">LOW</option>
+            <option value="critical">Critical</option>
+            <option value="warning">Warning</option>
+            <option value="info">Info</option>
           </select>
           <button
             v-if="statusFilter !== 'all' || severityFilter !== 'all'"
@@ -623,11 +623,12 @@ onMounted(async () => {
   font-size: 11px;
   font-weight: 700;
   flex-shrink: 0;
+  text-transform: capitalize;
 }
 
-.severity-high { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
-.severity-med { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
-.severity-low { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.severity-critical { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.severity-warning { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.severity-info { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
 
 .review-title { font-size: 14px; font-weight: 600; color: #1e293b; }
 .review-location { font-size: 12px; color: #3b82f6; font-family: monospace; margin-top: 4px; }
