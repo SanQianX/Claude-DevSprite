@@ -103,13 +103,18 @@ const getDefaultConfig = (): Config => ({
   },
   projectDiscovery: {
     // Default scan paths: common project directories
+    // Include the parent of this config file's location (the project root) for reliable discovery
     scanPaths: [
       process.cwd(),
+      // Add parent directory of dist/ (project root when running from dist)
+      path.resolve(__dirname, '..', '..'),
       path.join(os.homedir(), 'Projects'),
       path.join(os.homedir(), 'code'),
       path.join(os.homedir(), 'dev'),
       path.join(os.homedir(), 'workspace'),
-    ].filter(p => {
+    ].filter((p, i, arr) => {
+      // Deduplicate and filter non-existent paths
+      if (arr.indexOf(p) !== i) return false;
       try {
         return require('fs').existsSync(p);
       } catch {
