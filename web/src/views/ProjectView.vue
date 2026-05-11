@@ -31,6 +31,8 @@
           class="search-box"
           type="text"
           placeholder="搜索知识库..."
+          v-model="searchQuery"
+          @keydown.enter="handleSearch"
         />
       </div>
     </div>
@@ -60,6 +62,7 @@ const router = useRouter()
 
 const projectName = ref(route.params.projectName as string)
 const activeTab = ref<'dashboard' | 'workspace'>('dashboard')
+const searchQuery = ref('')
 
 // Sync tab from URL query
 watch(
@@ -82,6 +85,12 @@ watch(
 function setTab(tab: 'dashboard' | 'workspace') {
   activeTab.value = tab
   router.replace({ query: { ...route.query, tab } })
+}
+
+function handleSearch() {
+  const query = searchQuery.value.trim()
+  if (!query) return
+  router.push({ path: '/search', query: { q: query, project: projectName.value } })
 }
 </script>
 

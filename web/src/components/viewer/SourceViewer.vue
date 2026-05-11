@@ -5,14 +5,14 @@
       <div class="source-language">{{ data.language }}</div>
     </div>
 
-    <div class="source-content">
+    <div class="source-content" ref="contentRef">
       <pre><code v-html="highlightedCode"></code></pre>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import hljs from 'highlight.js/lib/core'
 import typescript from 'highlight.js/lib/languages/typescript'
 import javascript from 'highlight.js/lib/languages/javascript'
@@ -36,17 +36,44 @@ import type { SourceCodeData } from '@/types'
 
 const props = defineProps<{
   data: SourceCodeData
+  highlightLine?: number
 }>()
+
+const contentRef = ref<HTMLElement | null>(null)
 
 const highlightedCode = computed(() => {
   try {
     const language = hljs.getLanguage(props.data.language)
       ? props.data.language
       : 'plaintext'
-    return hljs.highlight(props.data.content, { language }).value
+    const lines = props.data.content.split('\n')
+    const highlighted = lines.map((line, index) => {
+      const lineNum = index + 1
+      const isHighlighted = props.highlightLine === lineNum
+      const highlightedLine = hljs.highlight(line, { language }).value
+      return `<span class="line${isHighlighted ? ' highlighted' : ''}" data-line="${lineNum}"><span class="line-num">${lineNum}</span>${highlightedLine}</span>`
+    }).join('\n')
+    return highlighted
   } catch {
     return hljs.highlightAuto(props.data.content).value
   }
+})
+
+function scrollToLine() {
+  if (props.highlightLine && contentRef.value) {
+    const lineEl = contentRef.value.querySelector(`.line.highlighted`)
+    if (lineEl) {
+      lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+}
+
+onMounted(() => {
+  scrollToLine()
+})
+
+watch(() => props.highlightLine, () => {
+  scrollToLine()
 })
 </script>
 
@@ -100,5 +127,26 @@ const highlightedCode = computed(() => {
   font-family: inherit;
   background: transparent;
   padding: 0;
+  display: block;
+}
+
+.source-content :deep(.line) {
+  display: block;
+  padding: 0 8px;
+  border-left: 3px solid transparent;
+}
+
+.source-content :deep(.line.highlighted) {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left-color: var(--color-primary);
+}
+
+.source-content :deep(.line-num) {
+  display: inline-block;
+  width: 40px;
+  color: #94a3b8;
+  text-align: right;
+  margin-right: 16px;
+  user-select: none;
 }
 </style>

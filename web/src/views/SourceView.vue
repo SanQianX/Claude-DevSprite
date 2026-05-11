@@ -25,7 +25,7 @@
       </div>
 
       <div class="source-body">
-        <SourceViewer :data="source" />
+        <SourceViewer :data="source" :highlight-line="highlightLine" />
       </div>
     </div>
   </div>
@@ -50,6 +50,10 @@ const error = ref<string | null>(null)
 
 const projectName = computed(() => route.params.projectName as string)
 const filePath = computed(() => (route.query.path as string) || '')
+const highlightLine = computed(() => {
+  const line = route.query.line
+  return line ? parseInt(line as string) : undefined
+})
 
 const breadcrumbItems = computed(() => [
   { label: 'Projects', to: '/' },

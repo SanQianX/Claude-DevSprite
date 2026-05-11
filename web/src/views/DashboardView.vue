@@ -85,17 +85,17 @@
           <div class="section-title">AI 审查队列</div>
         </div>
         <div class="review-filters">
-          <select class="filter-select">
-            <option>全部</option>
-            <option>待审批</option>
-            <option>已批准</option>
-            <option>已忽略</option>
+          <select class="filter-select" v-model="statusFilter">
+            <option value="all">全部</option>
+            <option value="pending">待审批</option>
+            <option value="approved">已批准</option>
+            <option value="ignored">已忽略</option>
           </select>
-          <select class="filter-select">
-            <option>严重性</option>
-            <option>HIGH</option>
-            <option>MED</option>
-            <option>LOW</option>
+          <select class="filter-select" v-model="severityFilter">
+            <option value="all">严重性</option>
+            <option value="HIGH">HIGH</option>
+            <option value="MED">MED</option>
+            <option value="LOW">LOW</option>
           </select>
           <div class="review-counts">
             待审批: <span>{{ reviewStats.pending }}</span> |
@@ -106,7 +106,10 @@
         <div v-if="reviews.length === 0" class="empty-reviews">
           暂无审查项
         </div>
-        <div v-for="review in reviews" :key="review.id" class="review-item">
+        <div v-else-if="filteredReviews.length === 0" class="empty-reviews">
+          无匹配的审查项
+        </div>
+        <div v-for="review in filteredReviews" :key="review.id" class="review-item">
           <div class="review-top">
             <span class="severity-badge" :class="'severity-' + review.severity.toLowerCase()">
               {{ review.severity }}
@@ -122,7 +125,7 @@
             <div class="review-actions">
               <button class="btn btn-approve" @click="approveReview(review.id)">批准修复</button>
               <button class="btn btn-ignore" @click="ignoreReview(review.id)">忽略</button>
-              <button class="btn btn-locate">定位</button>
+              <button class="btn btn-locate" @click="locateReview(review)">定位</button>
             </div>
           </div>
         </div>
@@ -145,6 +148,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
 import type { Task, Review } from '@/api/dashboard'
 
@@ -152,10 +156,13 @@ const props = defineProps<{
   projectName: string
 }>()
 
+const router = useRouter()
 const dashboardStore = useDashboardStore()
 
 const showAddTask = ref(false)
 const newTaskTitle = ref('')
+const statusFilter = ref('all')
+const severityFilter = ref('all')
 
 const projectColor = ref('#f97316')
 const projectPath = ref('')
@@ -197,6 +204,14 @@ const completionPercent = computed(() =>
 
 const reviews = computed(() => dashboardStore.reviews)
 
+const filteredReviews = computed(() => {
+  return reviews.value.filter(r => {
+    const statusMatch = statusFilter.value === 'all' || r.status === statusFilter.value
+    const severityMatch = severityFilter.value === 'all' || r.severity === severityFilter.value
+    return statusMatch && severityMatch
+  })
+})
+
 const reviewStats = computed(() => ({
   pending: reviews.value.filter(r => r.status === 'pending').length,
   approved: reviews.value.filter(r => r.status === 'approved').length,
@@ -209,6 +224,20 @@ function approveReview(id: number) {
 
 function ignoreReview(id: number) {
   dashboardStore.ignoreReview(props.projectName, id)
+}
+
+function locateReview(review: Review) {
+  // Parse location like "src/utils/helper.ts:42" or "docs/guide.md"
+  const location = review.location
+  const colonIndex = location.indexOf(':')
+  const filePath = colonIndex > -1 ? location.substring(0, colonIndex) : location
+  const lineNum = colonIndex > -1 ? parseInt(location.substring(colonIndex + 1)) : undefined
+
+  // Navigate to source view with file path
+  router.push({
+    path: `/project/${props.projectName}/source`,
+    query: { path: filePath, line: lineNum?.toString() }
+  })
 }
 
 async function addTask() {
