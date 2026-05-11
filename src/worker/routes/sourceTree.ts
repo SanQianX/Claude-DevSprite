@@ -29,7 +29,9 @@ const IGNORE_FILES = new Set([
   '.DS_Store', 'Thumbs.db', '.gitkeep',
 ]);
 
-function buildSourceTree(dirPath: string, relativePath: string = ''): SourceTreeNode[] {
+function buildSourceTree(dirPath: string, relativePath: string = '', depth: number = 0): SourceTreeNode[] {
+  const MAX_DEPTH = 15;
+  if (depth > MAX_DEPTH) return [];
   const entries: SourceTreeNode[] = [];
 
   try {
@@ -49,7 +51,7 @@ function buildSourceTree(dirPath: string, relativePath: string = ''): SourceTree
       if (item.isDirectory()) {
         if (IGNORE_DIRS.has(item.name)) continue;
 
-        const children = buildSourceTree(fullPath, relPath);
+        const children = buildSourceTree(fullPath, relPath, depth + 1);
         entries.push({
           name: item.name,
           path: relPath,
@@ -97,8 +99,8 @@ export function registerSourceTreeRoutes(app: Express): void {
    */
   app.get('/api/projects/:name/source-file', asyncHandler(async (req: Request, res: Response) => {
     const projectName = req.params.name;
-    const filePath = req.query.path as string;
-    if (!filePath) throw createError('Path is required', 400);
+    const filePath = req.query.path;
+    if (!filePath || typeof filePath !== 'string') throw createError('Path is required', 400);
 
     const db = await getDatabase();
     const project = db.getProject(projectName);

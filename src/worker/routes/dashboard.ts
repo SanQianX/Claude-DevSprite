@@ -6,6 +6,7 @@
 import type { Express, Request, Response } from 'express';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { getDatabase } from '../db';
+import type { Task, Review } from '../db';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('dashboard');
@@ -38,17 +39,20 @@ export function registerDashboardRoutes(app: Express): void {
     const { title, description, status, priority, estimated } = req.body;
     if (!title) throw createError('Title is required', 400);
 
+    const VALID_STATUSES = ['backlog', 'todo', 'in_progress', 'review', 'done', 'cancelled'];
+    const VALID_PRIORITIES = ['low', 'medium', 'high', 'critical'];
+
     const task = db.createTask({
       project_id: project.id,
       title,
       description: description || null,
-      status: status || 'backlog',
-      priority: priority || 'medium',
+      status: VALID_STATUSES.includes(status) ? status : 'backlog',
+      priority: VALID_PRIORITIES.includes(priority) ? priority : 'medium',
       estimated: estimated || null,
     });
 
     logger.info(`Task created: ${title} for project ${projectName}`);
-    res.json(task);
+    res.status(201).json(task);
   }));
 
   /**
@@ -57,16 +61,30 @@ export function registerDashboardRoutes(app: Express): void {
    */
   app.put('/api/projects/:name/tasks/:id', asyncHandler(async (req: Request, res: Response) => {
     const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId)) throw createError('Invalid task ID', 400);
     const db = await getDatabase();
     const task = db.getTask(taskId);
     if (!task) throw createError('Task not found', 404);
 
-    const updates = req.body;
+    const VALID_STATUSES = ['backlog', 'todo', 'in_progress', 'review', 'done', 'cancelled'];
+    const VALID_PRIORITIES = ['low', 'medium', 'high', 'critical'];
+    const ALLOWED = ['title', 'description', 'status', 'priority', 'estimated', 'completed_at'];
+
+    const updates: Record<string, unknown> = {};
+    for (const key of ALLOWED) {
+      if (key in req.body) updates[key] = req.body[key];
+    }
+    if (updates.status && !VALID_STATUSES.includes(updates.status as string)) {
+      throw createError('Invalid status value', 400);
+    }
+    if (updates.priority && !VALID_PRIORITIES.includes(updates.priority as string)) {
+      throw createError('Invalid priority value', 400);
+    }
     if (updates.status === 'done' && !updates.completed_at) {
       updates.completed_at = new Date().toISOString();
     }
 
-    db.updateTask(taskId, updates);
+    db.updateTask(taskId, updates as Partial<Task>);
     res.json({ success: true });
   }));
 
@@ -76,6 +94,7 @@ export function registerDashboardRoutes(app: Express): void {
    */
   app.delete('/api/projects/:name/tasks/:id', asyncHandler(async (req: Request, res: Response) => {
     const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId)) throw createError('Invalid task ID', 400);
     const db = await getDatabase();
     const task = db.getTask(taskId);
     if (!task) throw createError('Task not found', 404);
@@ -127,7 +146,7 @@ export function registerDashboardRoutes(app: Express): void {
     });
 
     logger.info(`Review created: ${title} for project ${projectName}`);
-    res.json(review);
+    res.status(201).json(review);
   }));
 
   /**
@@ -136,16 +155,21 @@ export function registerDashboardRoutes(app: Express): void {
    */
   app.put('/api/projects/:name/reviews/:id', asyncHandler(async (req: Request, res: Response) => {
     const reviewId = parseInt(req.params.id, 10);
+    if (isNaN(reviewId)) throw createError('Invalid review ID', 400);
     const db = await getDatabase();
     const review = db.getReview(reviewId);
     if (!review) throw createError('Review not found', 404);
 
-    const updates = req.body;
-    if (updates.status && ['approved', 'ignored'].includes(updates.status)) {
+    const ALLOWED = ['title', 'severity', 'location', 'suggestion', 'source', 'status', 'resolved_at'];
+    const updates: Record<string, unknown> = {};
+    for (const key of ALLOWED) {
+      if (key in req.body) updates[key] = req.body[key];
+    }
+    if (updates.status && ['approved', 'ignored'].includes(updates.status as string)) {
       updates.resolved_at = new Date().toISOString();
     }
 
-    db.updateReview(reviewId, updates);
+    db.updateReview(reviewId, updates as Partial<Review>);
     res.json({ success: true });
   }));
 
@@ -155,6 +179,7 @@ export function registerDashboardRoutes(app: Express): void {
    */
   app.delete('/api/projects/:name/reviews/:id', asyncHandler(async (req: Request, res: Response) => {
     const reviewId = parseInt(req.params.id, 10);
+    if (isNaN(reviewId)) throw createError('Invalid review ID', 400);
     const db = await getDatabase();
     const review = db.getReview(reviewId);
     if (!review) throw createError('Review not found', 404);

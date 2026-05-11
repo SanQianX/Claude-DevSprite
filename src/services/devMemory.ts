@@ -228,7 +228,8 @@ export class DevMemory {
         createdAt: r.created_at,
         lastActivity: r.created_at,
       }));
-    } catch {
+    } catch (err) {
+      logger.warn(`Failed to get recent sessions: ${err}`);
       return [];
     }
   }

@@ -7,6 +7,9 @@
 import type { Express, Request, Response } from 'express';
 import { asyncHandler } from '../middleware/errorHandler';
 import { getAllProjectDetectors } from '../detectorRegistry';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('git-routes');
 
 export function registerGitRoutes(app: Express): void {
   /**
@@ -33,7 +36,7 @@ export function registerGitRoutes(app: Express): void {
 
         if (normalizedEntryPath === normalizedRepoPath || normalizedRepoPath.startsWith(normalizedEntryPath)) {
           const activeDetector = (entry.detector as any).activeDetector;
-          console.log(`[GitRoutes] Hook notify received for project ${projectName}: commitHash=${commitHash}, detector=${activeDetector?.name}`);
+          logger.info(`Hook notify received for project ${projectName}: commitHash=${commitHash}, detector=${activeDetector?.name}`);
 
           if (activeDetector && activeDetector.name === 'post-commit-hook') {
             await activeDetector.handleHookNotification(commitHash);
@@ -44,12 +47,12 @@ export function registerGitRoutes(app: Express): void {
       }
 
       if (!foundDetector) {
-        console.log(`[GitRoutes] No detector found for repo: ${repoPath}`);
+        logger.warn(`No detector found for repo: ${repoPath}`);
       }
 
       res.json({ success: true });
     } catch (error) {
-      console.error('[GitRoutes] Error handling hook notify:', error);
+      logger.error('Error handling hook notify:', error);
       res.status(500).json({ error: 'Failed to handle hook notification' });
     }
   }));

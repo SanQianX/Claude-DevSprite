@@ -27,7 +27,7 @@
           <button class="back-btn" @click="currentFile = null">← 文件树</button>
           <span class="file-path">{{ currentFile.path }}</span>
         </div>
-        <div class="code-body">
+        <div class="code-body" ref="codeBodyRef">
           <div class="line-numbers">
             <div
               v-for="(_, i) in codeLines"
@@ -102,17 +102,21 @@ const currentFile = ref<TreeNode | null>(null)
 const codeContent = ref('')
 const codeLines = ref<string[]>([])
 const loading = ref(false)
+const loadingFile = ref(false)
 const highlightedLine = ref(0)
 const relatedDocs = ref<RelatedDoc[]>([])
 const loadingRelated = ref(false)
+const codeBodyRef = ref<HTMLElement | null>(null)
 
 async function fetchTree() {
   loading.value = true
   try {
     const res = await fetch(`/api/projects/${encodeURIComponent(props.projectName)}/source-tree`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     tree.value = data.tree || []
-  } catch {
+  } catch (err) {
+    console.error('Failed to fetch source tree:', err)
     tree.value = []
   } finally {
     loading.value = false
@@ -120,10 +124,12 @@ async function fetchTree() {
 }
 
 async function loadFile(filePath: string, line: number = 0) {
+  loadingFile.value = true
   try {
     const res = await fetch(
       `/api/projects/${encodeURIComponent(props.projectName)}/source-file?path=${encodeURIComponent(filePath)}`
     )
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     if (data.content) {
       // Find the node in tree
@@ -141,9 +147,12 @@ async function loadFile(filePath: string, line: number = 0) {
 
       fetchRelatedDocs(filePath)
     }
-  } catch {
+  } catch (err) {
+    console.error('Failed to load file:', err)
     codeContent.value = '// 加载文件失败'
     codeLines.value = ['// 加载文件失败']
+  } finally {
+    loadingFile.value = false
   }
 }
 
@@ -153,9 +162,11 @@ async function fetchRelatedDocs(filePath: string) {
     const res = await fetch(
       `/api/projects/${encodeURIComponent(props.projectName)}/related-docs?path=${encodeURIComponent(filePath)}`
     )
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     relatedDocs.value = data.docs || []
-  } catch {
+  } catch (err) {
+    console.error('Failed to fetch related docs:', err)
     relatedDocs.value = []
   } finally {
     loadingRelated.value = false
@@ -174,7 +185,8 @@ function findNodeInTree(nodes: TreeNode[], path: string): TreeNode | null {
 }
 
 function scrollToLine(line: number) {
-  const lineEl = document.querySelector(`.code-line-${line}`)
+  if (!codeBodyRef.value) return
+  const lineEl = codeBodyRef.value.querySelector(`.code-line-${line}`)
   if (lineEl) {
     lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
@@ -183,20 +195,25 @@ function scrollToLine(line: number) {
 async function selectFile(node: TreeNode) {
   currentFile.value = node
   emit('fileSelect', node.path)
+  loadingFile.value = true
 
   try {
     const res = await fetch(
       `/api/projects/${encodeURIComponent(props.projectName)}/source-file?path=${encodeURIComponent(node.path)}`
     )
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     if (data.content) {
       codeContent.value = data.content
       codeLines.value = data.content.split('\n')
       fetchRelatedDocs(node.path)
     }
-  } catch {
+  } catch (err) {
+    console.error('Failed to load file:', err)
     codeContent.value = '// 加载文件失败'
     codeLines.value = ['// 加载文件失败']
+  } finally {
+    loadingFile.value = false
   }
 }
 

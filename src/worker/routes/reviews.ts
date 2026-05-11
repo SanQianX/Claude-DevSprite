@@ -8,6 +8,8 @@
  */
 
 import type { Express, Request, Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { getDatabase } from '../db';
 import { CodeReviewer } from '../../analyzer/codeReviewer';
@@ -128,15 +130,19 @@ export function registerReviewRoutes(app: Express): void {
     }
 
     // Write the fixed content
-    const fs = require('fs');
-    const path = require('path');
     const fullPath = path.join(project.path, review.file_path);
+
+    // Security: check path traversal
+    const resolvedPath = path.resolve(fullPath);
+    if (!resolvedPath.startsWith(path.resolve(project.path))) {
+      throw createError('Path traversal not allowed', 403);
+    }
 
     if (!fs.existsSync(fullPath)) {
       throw createError('源文件不存在', 404);
     }
 
-    fs.writeFileSync(fullPath, fix.fixedContent, 'utf-8');
+    await fs.promises.writeFile(fullPath, fix.fixedContent, 'utf-8');
 
     // Mark review as fixed
     db.updateReview(id, { status: 'fixed', resolved_at: new Date().toISOString() });

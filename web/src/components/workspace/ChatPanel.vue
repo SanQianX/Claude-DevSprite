@@ -48,14 +48,14 @@
           placeholder="输入消息..."
           @keydown.enter="send"
         />
-        <button class="chat-send" @click="send" :disabled="!input.trim()">发送</button>
+        <button class="chat-send" @click="send" :disabled="!input.trim() || sending">发送</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 
 const props = defineProps<{
   projectName: string
@@ -82,6 +82,8 @@ const input = ref('')
 const messagesRef = ref<HTMLElement | null>(null)
 const memoryContext = ref<MemoryContext | null>(null)
 const memoryExpanded = ref(false)
+const sending = ref(false)
+let pendingTimeout: ReturnType<typeof setTimeout> | null = null
 
 async function fetchMemory() {
   try {
@@ -101,20 +103,23 @@ onMounted(() => {
 
 async function send() {
   const text = input.value.trim()
-  if (!text) return
+  if (!text || sending.value) return
 
   messages.value.push({ role: 'user', content: text })
   input.value = ''
+  sending.value = true
 
   await nextTick()
   scrollToBottom()
 
   // Simulate AI response (will be replaced with real WebSocket chat)
-  setTimeout(() => {
+  pendingTimeout = setTimeout(() => {
     messages.value.push({
       role: 'assistant',
       content: `收到你的消息: "${text}"。\n\n这是开发对话面板的占位响应。完整的对话功能将通过 WebSocket 连接到 AI 代理。`,
     })
+    sending.value = false
+    pendingTimeout = null
     nextTick(() => scrollToBottom())
   }, 500)
 }
@@ -124,6 +129,13 @@ function scrollToBottom() {
     messagesRef.value.scrollTop = messagesRef.value.scrollHeight
   }
 }
+
+onBeforeUnmount(() => {
+  if (pendingTimeout) {
+    clearTimeout(pendingTimeout)
+    pendingTimeout = null
+  }
+})
 </script>
 
 <style scoped>

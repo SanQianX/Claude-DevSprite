@@ -239,8 +239,8 @@ export class CodeReviewer {
 
     // Save findings to database
     const db = await getDatabase();
-    for (const finding of result.findings) {
-      db.createReview({
+    if (result.findings.length > 0) {
+      const reviews = result.findings.map(finding => ({
         project_id: projectId,
         commit_hash: commitHash,
         file_path: finding.file,
@@ -251,9 +251,10 @@ export class CodeReviewer {
         description: finding.description,
         suggestion: finding.suggestion || null,
         location: `${finding.file}:${finding.line}`,
-        source: 'ai',
-        status: 'pending',
-      });
+        source: 'ai' as const,
+        status: 'pending' as const,
+      }));
+      db.createReviewsBatch(reviews);
     }
 
     // Update last review commit
@@ -288,7 +289,7 @@ export class CodeReviewer {
 
     try {
       const parsed = JSON.parse(response.content);
-      if (parsed.fixedContent && parsed.explanation) {
+      if (typeof parsed.fixedContent === 'string' && parsed.fixedContent.length > 0 && typeof parsed.explanation === 'string') {
         return parsed;
       }
     } catch {

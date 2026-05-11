@@ -6,12 +6,30 @@
 import { startServer } from './server';
 import { logger } from '../utils/logger';
 import { CodeReviewer } from '../analyzer/codeReviewer';
+import { closeDatabase } from './db';
 
 // Catch unhandled promise rejections to prevent crash
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection:', reason);
   // Don't crash - log and continue
 });
+
+/**
+ * Graceful shutdown handler
+ */
+function gracefulShutdown(signal: string) {
+  logger.info(`Received ${signal}, shutting down gracefully...`);
+  try {
+    closeDatabase();
+    logger.info('Database flushed and closed');
+  } catch (err) {
+    logger.error('Error during shutdown:', err);
+  }
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 /**
  * Start the worker service

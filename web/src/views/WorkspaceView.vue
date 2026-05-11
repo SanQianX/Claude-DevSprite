@@ -96,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DocPanel from '@/components/workspace/DocPanel.vue'
 import CodePanel from '@/components/workspace/CodePanel.vue'
@@ -205,11 +205,12 @@ function startResize(type: string, e: MouseEvent) {
 function onResize(e: MouseEvent) {
   if (!resizeState) return
   const delta = e.clientX - resizeState.startX
+  const maxPanelWidth = Math.min(window.innerWidth - 300, 1200)
   if (resizeState.type === 'doc-code') {
-    panelWidths.doc = Math.max(250, resizeState.startWidths.doc + delta)
-    panelWidths.code = Math.max(250, resizeState.startWidths.code - delta)
+    panelWidths.doc = Math.min(maxPanelWidth, Math.max(250, resizeState.startWidths.doc + delta))
+    panelWidths.code = Math.min(maxPanelWidth, Math.max(250, resizeState.startWidths.code - delta))
   } else if (resizeState.type === 'code-chat') {
-    panelWidths.code = Math.max(250, resizeState.startWidths.code + delta)
+    panelWidths.code = Math.min(maxPanelWidth, Math.max(250, resizeState.startWidths.code + delta))
   }
 }
 
@@ -218,6 +219,10 @@ function stopResize() {
   document.removeEventListener('mousemove', onResize)
   document.removeEventListener('mouseup', stopResize)
 }
+
+onBeforeUnmount(() => {
+  stopResize()
+})
 
 // Initialize from URL on mount
 syncFromUrl()

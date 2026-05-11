@@ -30,15 +30,16 @@
           <button class="back-btn" @click="currentDoc = null">← 返回列表</button>
           <span class="doc-breadcrumb">{{ currentDoc.path }}</span>
         </div>
-        <div class="doc-body" v-html="renderedContent"></div>
+        <div class="doc-body" ref="docBodyRef" v-html="renderedContent"></div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const props = withDefaults(defineProps<{
   projectName: string
@@ -66,37 +67,41 @@ const renderedContent = ref('')
 const loading = ref(false)
 const docBodyRef = ref<HTMLElement | null>(null)
 
+// Local marked instance to avoid global mutation
+const localMarked = new marked.Marked()
+
 // Custom renderer to convert [source:path:line] to clickable links
-const renderer = new marked.Renderer()
-const originalParagraph = renderer.paragraph.bind(renderer)
+const renderer = new localMarked.Renderer()
 renderer.paragraph = function (tokens: any) {
   let text = this.parser.parseInline(tokens) as string
   // Replace [source:path:line] patterns with clickable links
   text = text.replace(
     /\[source:([^\]]+?):(\d+)\]/g,
-    '<a class="source-link" data-path="$1" data-line="$2" href="javascript:void(0)">📍 $1:$2</a>'
+    '<a class="source-link" data-path="$1" data-line="$2" href="#">📍 $1:$2</a>'
   )
   return `<p>${text}</p>`
 }
 
-marked.setOptions({ renderer })
+localMarked.use({ renderer })
 
 async function fetchDocuments() {
   loading.value = true
   try {
     const res = await fetch(`/api/projects/${encodeURIComponent(props.projectName)}/tree`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     if (data.tree?.children) {
       documents.value = flattenTree(data.tree.children)
     }
-  } catch {
+  } catch (err) {
+    console.error('Failed to fetch documents:', err)
     documents.value = []
   } finally {
     loading.value = false
   }
 }
 
-function flattenTree(nodes: any[]): DocItem[] {
+function flattenTree(nodes: Array<{ type?: string; path?: string; name?: string; category?: string; children?: unknown[] }>): DocItem[] {
   const docs: DocItem[] = []
   for (const node of nodes) {
     if (node.type === 'file' && node.path?.endsWith('.md')) {
@@ -106,8 +111,8 @@ function flattenTree(nodes: any[]): DocItem[] {
         category: node.category || 'uncategorized',
       })
     }
-    if (node.children) {
-      docs.push(...flattenTree(node.children))
+    if (node.children && Array.isArray(node.children)) {
+      docs.push(...flattenTree(node.children as Array<{ type?: string; path?: string; name?: string; category?: string; children?: unknown[] }>))
     }
   }
   return docs
@@ -122,28 +127,29 @@ async function selectDoc(doc: DocItem) {
     const res = await fetch(
       `/api/projects/${encodeURIComponent(props.projectName)}/file?path=${encodeURIComponent(doc.path)}`
     )
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     if (data.content) {
-      renderedContent.value = marked.parse(data.content) as string
+      renderedContent.value = DOMPurify.sanitize(localMarked.parse(data.content) as string)
       await nextTick()
       bindSourceLinks()
     }
-  } catch {
+  } catch (err) {
+    console.error('Failed to load document:', err)
     renderedContent.value = '<p>加载文档失败</p>'
   }
 }
 
 function bindSourceLinks() {
   nextTick(() => {
-    const el = document.querySelector('.doc-body')
-    if (!el) return
-    el.querySelectorAll('.source-link').forEach(link => {
+    if (!docBodyRef.value) return
+    docBodyRef.value.querySelectorAll('.source-link').forEach(link => {
       link.addEventListener('click', (e) => {
         e.preventDefault()
-        const path = (e.target as HTMLElement).getAttribute('data-path')
+        const linkPath = (e.target as HTMLElement).getAttribute('data-path')
         const line = parseInt((e.target as HTMLElement).getAttribute('data-line') || '1', 10)
-        if (path) {
-          emit('sourceLinkClick', path, line)
+        if (linkPath) {
+          emit('sourceLinkClick', linkPath, line)
         }
       })
     })
@@ -152,6 +158,10 @@ function bindSourceLinks() {
 
 onMounted(() => {
   fetchDocuments()
+})
+
+onBeforeUnmount(() => {
+  // Cleanup handled by Vue - DOM elements removed automatically
 })
 
 watch(() => props.projectName, () => {

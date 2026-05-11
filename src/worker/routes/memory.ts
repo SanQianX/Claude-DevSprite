@@ -60,6 +60,10 @@ export function registerMemoryRoutes(app: Express): void {
       throw createError('sessionId and messages array are required', 400);
     }
 
+    if (messages.length > 1000) {
+      throw createError('Messages array too large (max 1000)', 400);
+    }
+
     const db = await getDatabase();
     const project = db.getProject(projectName);
     if (!project) throw createError('Project not found', 404);

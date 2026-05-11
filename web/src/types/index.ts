@@ -114,36 +114,3 @@ export interface BreadcrumbItem {
   label: string
   to?: string
 }
-
-// ========================================
-// Store State Types
-// ========================================
-
-export interface ProjectState {
-  projects: Project[]
-  currentProject: Project | null
-  loading: boolean
-  error: string | null
-}
-
-export interface KnowledgeState {
-  fileTree: FileTreeNode | null
-  currentDocument: DocumentData | null
-  toc: TocItem[]
-  loading: boolean
-  error: string | null
-  expandedPaths: Set<string>
-}
-
-export interface SearchState {
-  query: string
-  results: SearchResult[]
-  isSearching: boolean
-  error: string | null
-}
-
-export interface UIState {
-  sidebarOpen: boolean
-  tocPanelOpen: boolean
-  theme: 'light' | 'dark'
-}

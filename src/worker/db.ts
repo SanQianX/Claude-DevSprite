@@ -127,7 +127,6 @@ export class DatabaseManager {
     const manager = new DatabaseManager(dbPath);
 
     // Locate the sql.js WASM file
-    const wasmPath = path.join(__dirname, '../../node_modules/sql.js/dist/sql-wasm.wasm');
     const SQL = await initSqlJs({
       locateFile: (file: string) => path.join(__dirname, '../../node_modules/sql.js/dist', file),
     });
@@ -292,6 +291,11 @@ export class DatabaseManager {
 
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_reviews_project ON reviews(project_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_analysis_log_project_created ON analysis_log(project_id, created_at)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_reviews_project_status ON reviews(project_id, status)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_reviews_project_created ON reviews(project_id, created_at)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_session_summaries_project ON session_summaries(project_name)`);
 
     // Session summaries table
     this.db.run(`
@@ -378,11 +382,12 @@ export class DatabaseManager {
   }
 
   updateProject(id: string, updates: Partial<Project>): void {
-    const fields = Object.keys(updates).filter(k => k !== 'id');
+    const ALLOWED = new Set(['name', 'path', 'knowledge_path', 'last_analysis_commit', 'last_full_analysis', 'analysis_count']);
+    const fields = Object.keys(updates).filter(k => k !== 'id' && ALLOWED.has(k));
     if (fields.length === 0) return;
 
     const setClause = fields.map(f => `${f} = ?`).join(', ');
-    const values = fields.map(f => (updates as any)[f]);
+    const values = fields.map(f => (updates as Record<string, unknown>)[f]);
     this.run(`UPDATE projects SET ${setClause}, updated_at = ? WHERE id = ?`, [...values, new Date().toISOString(), id]);
     this.save();
   }
@@ -423,11 +428,12 @@ export class DatabaseManager {
   }
 
   updateDocument(id: string, updates: Partial<Document>): void {
-    const fields = Object.keys(updates).filter(k => k !== 'id');
+    const ALLOWED = new Set(['project_id', 'path', 'title', 'category', 'commit_hash']);
+    const fields = Object.keys(updates).filter(k => k !== 'id' && ALLOWED.has(k));
     if (fields.length === 0) return;
 
     const setClause = fields.map(f => `${f} = ?`).join(', ');
-    const values = fields.map(f => (updates as any)[f]);
+    const values = fields.map(f => (updates as Record<string, unknown>)[f]);
     this.run(`UPDATE documents SET ${setClause}, updated_at = ? WHERE id = ?`, [...values, new Date().toISOString(), id]);
     this.save();
   }
@@ -594,10 +600,11 @@ export class DatabaseManager {
   }
 
   updateTask(id: number, updates: Partial<Task>): void {
-    const fields = Object.keys(updates).filter(k => k !== 'id');
+    const ALLOWED = new Set(['title', 'description', 'status', 'priority', 'estimated', 'completed_at']);
+    const fields = Object.keys(updates).filter(k => k !== 'id' && ALLOWED.has(k));
     if (fields.length === 0) return;
     const setClause = fields.map(f => `${f} = ?`).join(', ');
-    const values = fields.map(f => (updates as any)[f]);
+    const values = fields.map(f => (updates as Record<string, unknown>)[f]);
     this.run(`UPDATE tasks SET ${setClause}, updated_at = ? WHERE id = ?`, [...values, new Date().toISOString(), id]);
     this.save();
   }
@@ -634,10 +641,11 @@ export class DatabaseManager {
   }
 
   updateReview(id: number, updates: Partial<Review>): void {
-    const fields = Object.keys(updates).filter(k => k !== 'id');
+    const ALLOWED = new Set(['title', 'severity', 'location', 'suggestion', 'source', 'status', 'commit_hash', 'file_path', 'line', 'category', 'description', 'resolved_at']);
+    const fields = Object.keys(updates).filter(k => k !== 'id' && ALLOWED.has(k));
     if (fields.length === 0) return;
     const setClause = fields.map(f => `${f} = ?`).join(', ');
-    const values = fields.map(f => (updates as any)[f]);
+    const values = fields.map(f => (updates as Record<string, unknown>)[f]);
     this.run(`UPDATE reviews SET ${setClause}, updated_at = ? WHERE id = ?`, [...values, new Date().toISOString(), id]);
     this.save();
   }
@@ -666,10 +674,14 @@ export class DatabaseManager {
 
   // Session summary operations
   getRecentSessions(projectId: string, limit: number = 10): any[] {
-    return this.queryAll(
-      'SELECT id, title, created_at FROM sessions WHERE project_id = ? ORDER BY created_at DESC LIMIT ?',
-      [projectId, limit]
-    );
+    try {
+      return this.queryAll(
+        'SELECT id, title, created_at FROM sessions WHERE project_id = ? ORDER BY created_at DESC LIMIT ?',
+        [projectId, limit]
+      );
+    } catch {
+      return [];
+    }
   }
 
   saveSessionSummary(sessionId: string, projectName: string, summary: string, keyTopics: string[], decisions: string[], actionItems: string[]): void {
@@ -683,6 +695,36 @@ export class DatabaseManager {
 
   getSessionSummary(sessionId: string): any {
     return this.queryOne('SELECT * FROM session_summaries WHERE session_id = ?', [sessionId]);
+  }
+
+  // Transaction support
+  beginTransaction(): void {
+    this.db.run('BEGIN TRANSACTION');
+  }
+
+  commit(): void {
+    this.db.run('COMMIT');
+    this.save();
+  }
+
+  rollback(): void {
+    this.db.run('ROLLBACK');
+  }
+
+  /**
+   * Batch create reviews inside a transaction (used by codeReviewer)
+   */
+  createReviewsBatch(reviews: Array<Omit<Review, 'id' | 'created_at' | 'updated_at' | 'resolved_at'>>): void {
+    this.beginTransaction();
+    try {
+      for (const review of reviews) {
+        this.createReview(review);
+      }
+      this.commit();
+    } catch (err) {
+      this.rollback();
+      throw err;
+    }
   }
 
   // Utility
@@ -720,7 +762,7 @@ export async function getDatabase(): Promise<DatabaseManager> {
   return dbInitPromise;
 }
 
-export async function closeDatabase(): Promise<void> {
+export function closeDatabase(): void {
   if (dbInstance) {
     dbInstance.close();
     dbInstance = null;
