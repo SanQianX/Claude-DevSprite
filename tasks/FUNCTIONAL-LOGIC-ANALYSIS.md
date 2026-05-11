@@ -362,3 +362,183 @@ setInterval(fetchDashboardStats, 30000)
 13. **源码查看** - 文件选择→高亮→行号
 14. **搜索功能** - 输入→结果→跳转
 15. **UI 响应式** - 布局适配→交互反馈
+
+---
+
+## UI 测试流程 (Playwright)
+
+### 标准测试流程
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Bug 修复 UI 测试流程                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Phase 1: 修复前测试 (验证 Bug 存在)                                     │
+│  ─────────────────────────────────────                                  │
+│  1. 启动 Playwright 浏览器                                              │
+│  2. 导航到测试页面                                                       │
+│  3. 模拟用户操作 (点击、输入、选择)                                       │
+│  4. 记录实际行为                                                         │
+│  5. 截图保存 (before-fix.png)                                           │
+│  6. 确认问题存在                                                         │
+│                                                                         │
+│  Phase 2: 实施修复                                                       │
+│  ────────────────                                                       │
+│  1. 分析问题原因                                                         │
+│  2. 修改代码                                                             │
+│  3. 重新构建 (npm run build)                                            │
+│  4. 重启服务 (daemon restart)                                           │
+│                                                                         │
+│  Phase 3: 修复后测试 (验证修复有效)                                       │
+│  ─────────────────────────────────────                                  │
+│  1. 执行相同操作                                                         │
+│  2. 验证预期行为                                                         │
+│  3. 截图保存 (after-fix.png)                                            │
+│  4. 确认问题已解决                                                       │
+│                                                                         │
+│  Phase 4: 回归测试 (确保无副作用)                                         │
+│  ─────────────────────────────────────                                  │
+│  1. 测试相关功能                                                         │
+│  2. 检查控制台错误                                                       │
+│  3. 验证性能无影响                                                       │
+│                                                                         │
+│  Phase 5: 提交代码                                                       │
+│  ────────────────                                                       │
+│  1. 更新 bugfix 文档                                                    │
+│  2. git commit                                                          │
+│  3. git push                                                            │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Playwright 测试脚本模板
+
+```javascript
+const { chromium } = require('playwright');
+
+async function testBugFix() {
+  const browser = await chromium.launch({ headless: false });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  // 监听控制台错误
+  page.on('console', msg => {
+    if (msg.type() === 'error') {
+      console.log(`[Console Error] ${msg.text()}`);
+    }
+  });
+
+  try {
+    // === Phase 1: 修复前测试 ===
+    console.log('=== Phase 1: 修复前测试 ===');
+
+    // 1. 打开页面
+    await page.goto('http://127.0.0.1:38888/xxx');
+    await page.waitForTimeout(2000);
+
+    // 2. 检查元素
+    const element = await page.$('.selector');
+    console.log(`元素存在: ${!!element}`);
+
+    // 3. 模拟操作
+    await page.click('.button');
+    await page.waitForTimeout(500);
+
+    // 4. 记录结果
+    const beforeCount = (await page.$$('.item')).length;
+    console.log(`操作前数量: ${beforeCount}`);
+
+    // 5. 截图
+    await page.screenshot({ path: 'before-fix.png', fullPage: true });
+
+    // === Phase 2: 等待修复 ===
+    console.log('\n=== 等待修复完成 ===');
+    // 修复完成后继续执行
+
+    // === Phase 3: 修复后测试 ===
+    console.log('\n=== Phase 3: 修复后测试 ===');
+
+    // 刷新页面
+    await page.reload();
+    await page.waitForTimeout(2000);
+
+    // 执行相同操作
+    await page.click('.button');
+    await page.waitForTimeout(500);
+
+    // 验证结果
+    const afterCount = (await page.$$('.item')).length;
+    console.log(`操作后数量: ${afterCount}`);
+
+    if (afterCount !== beforeCount) {
+      console.log('✅ 修复有效');
+    } else {
+      console.log('❌ 修复无效');
+    }
+
+    // 截图
+    await page.screenshot({ path: 'after-fix.png', fullPage: true });
+
+    // === Phase 4: 回归测试 ===
+    console.log('\n=== Phase 4: 回归测试 ===');
+
+    // 测试筛选器
+    await page.selectOption('.filter', 'value');
+    await page.waitForTimeout(500);
+    const filtered = (await page.$$('.item')).length;
+    console.log(`筛选后数量: ${filtered}`);
+
+    // 测试重置
+    await page.click('.reset-btn');
+    await page.waitForTimeout(500);
+    const reset = (await page.$$('.item')).length;
+    console.log(`重置后数量: ${reset}`);
+
+  } catch (error) {
+    console.error('测试失败:', error.message);
+  } finally {
+    await browser.close();
+  }
+}
+
+testBugFix().catch(console.error);
+```
+
+### 测试报告格式
+
+```markdown
+## UI 测试报告
+
+### 环境信息
+- 浏览器: Chromium (Playwright)
+- 测试页面: http://127.0.0.1:38888/xxx
+- 测试时间: YYYY-MM-DD HH:MM
+
+### 测试用例
+
+| 编号 | 测试项 | 修复前 | 修复后 | 状态 |
+|------|--------|--------|--------|------|
+| TC-001 | 元素显示 | 不显示 | 显示 | ✅ |
+| TC-002 | 点击响应 | 无反应 | 正常 | ✅ |
+| TC-003 | 筛选功能 | 不工作 | 正常 | ✅ |
+
+### 控制台输出
+```
+=== Phase 1: 修复前测试 ===
+元素存在: false
+操作前数量: 0
+
+=== Phase 3: 修复后测试 ===
+元素存在: true
+操作后数量: 10
+✅ 修复有效
+```
+
+### 截图
+- 修复前: before-fix.png
+- 修复后: after-fix.png
+
+### 结论
+✅ 所有测试通过，修复有效
+```
