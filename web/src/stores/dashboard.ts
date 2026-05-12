@@ -88,6 +88,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     return result
   }
 
+  async function batchFixReviews(projectName: string) {
+    const result = await dashboardApi.batchFixReviews(projectName)
+    await fetchReviews(projectName)
+    return result
+  }
+
   async function ignoreReview(projectName: string, reviewId: number) {
     await dashboardApi.updateReview(projectName, reviewId, { status: 'ignored' })
     // 更新状态而不是删除，这样筛选器和统计才能正确工作
@@ -128,6 +134,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     ignoreReview,
     fixReview,
     triggerScan,
+    batchFixReviews,
     fetchScannerConfig,
     updateScannerConfig,
   }

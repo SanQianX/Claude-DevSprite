@@ -106,6 +106,12 @@ export const dashboardApi = {
     ))
   },
 
+  async batchFixReviews(projectName: string): Promise<{ fixed: number; confirmed: number; failed: number; results: Array<{ id: number; action: string; title: string; error?: string }> }> {
+    return unwrap(apiClient.post<{ fixed: number; confirmed: number; failed: number; results: Array<{ id: number; action: string; title: string; error?: string }> }>(
+      `/projects/${encodeURIComponent(projectName)}/reviews/fix-batch`
+    ))
+  },
+
   // Scanner config
   async getScannerConfig(): Promise<{ enabled: boolean; intervalMs: number; isScanning: boolean }> {
     return unwrap(apiClient.get<{ enabled: boolean; intervalMs: number; isScanning: boolean }>(

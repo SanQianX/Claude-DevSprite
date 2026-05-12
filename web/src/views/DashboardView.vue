@@ -103,8 +103,12 @@
               <option :value="30">30 分钟</option>
               <option :value="60">1 小时</option>
             </select>
+            <label class="scan-toggle">
+              <input type="checkbox" v-model="autoFixAfterScan" />
+              <span class="scan-toggle-label">自动修复</span>
+            </label>
             <button class="scan-btn" :disabled="scanning" @click="startScan">
-              {{ scanning ? '扫描中...' : '开始扫描' }}
+              {{ scanning ? scanStatusText : '开始扫描' }}
             </button>
           </div>
         </div>
@@ -226,6 +230,9 @@ const statusFilter = ref('all')
 const severityFilter = ref('all')
 const selectedReviewId = ref<number | null>(null)
 const scanning = ref(false)
+const scanPhase = ref<'scan' | 'fix'>('scan')
+const scanFixProgress = ref({ fixed: 0, confirmed: 0, failed: 0, total: 0 })
+const autoFixAfterScan = ref(false)
 const analyzing = ref(false)
 const autoScanEnabled = ref(true)
 const scanIntervalMinutes = ref(10)
@@ -288,6 +295,12 @@ const reviewStats = computed(() => ({
   ignored: reviews.value.filter(r => r.status === 'ignored').length,
 }))
 
+const scanStatusText = computed(() => {
+  if (scanPhase.value === 'scan') return '扫描中...'
+  const p = scanFixProgress.value
+  return `修复中 ${p.fixed + p.confirmed + p.failed}/${p.total}...`
+})
+
 function approveReview(id: number) {
   dashboardStore.approveReview(props.projectName, id)
 }
@@ -302,8 +315,17 @@ async function fixReview(id: number) {
 
 async function startScan() {
   scanning.value = true
+  scanPhase.value = 'scan'
   try {
-    await dashboardStore.triggerScan(props.projectName)
+    const scanResult = await dashboardStore.triggerScan(props.projectName)
+
+    // Auto-fix if enabled and there are findings
+    if (autoFixAfterScan.value && scanResult.findingsCount > 0) {
+      scanPhase.value = 'fix'
+      scanFixProgress.value = { fixed: 0, confirmed: 0, failed: 0, total: scanResult.findingsCount }
+      const fixResult = await dashboardStore.batchFixReviews(props.projectName)
+      scanFixProgress.value = { fixed: fixResult.fixed, confirmed: fixResult.confirmed, failed: fixResult.failed, total: fixResult.fixed + fixResult.confirmed + fixResult.failed }
+    }
   } catch (e) {
     console.error('Scan failed:', e)
   } finally {
