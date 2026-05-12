@@ -7,6 +7,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const tasks = ref<Task[]>([])
   const reviews = ref<Review[]>([])
   const loading = ref(false)
+  const scannerConfig = ref<{ enabled: boolean; intervalMs: number; isScanning: boolean }>({
+    enabled: true,
+    intervalMs: 10 * 60 * 1000,
+    isScanning: false,
+  })
 
   async function fetchTasks(projectName: string) {
     try {
@@ -92,10 +97,26 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
   }
 
+  async function fetchScannerConfig() {
+    try {
+      const config = await dashboardApi.getScannerConfig()
+      scannerConfig.value = config
+    } catch {
+      // keep defaults
+    }
+  }
+
+  async function updateScannerConfig(config: { enabled?: boolean; intervalMs?: number }) {
+    const result = await dashboardApi.updateScannerConfig(config)
+    scannerConfig.value = result.config
+    return result.config
+  }
+
   return {
     tasks,
     reviews,
     loading,
+    scannerConfig,
     fetchTasks,
     fetchReviews,
     fetchAll,
@@ -106,5 +127,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     ignoreReview,
     fixReview,
     triggerScan,
+    fetchScannerConfig,
+    updateScannerConfig,
   }
 })

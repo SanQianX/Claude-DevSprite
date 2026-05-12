@@ -17,7 +17,7 @@ import { registerTeamRoutes } from './teams';
 import { registerTokenRoutes } from './tokens';
 import { registerDashboardRoutes } from './dashboard';
 import { registerSourceTreeRoutes } from './sourceTree';
-import { registerReviewRoutes } from './reviews';
+import { registerReviewRoutes, registerScannerConfigRoutes } from './reviews';
 import { registerMemoryRoutes } from './memory';
 
 export function registerRoutes(app: Express): void {
@@ -36,5 +36,6 @@ export function registerRoutes(app: Express): void {
   registerDashboardRoutes(app);
   registerSourceTreeRoutes(app);
   registerReviewRoutes(app);
+  registerScannerConfigRoutes(app);
   registerMemoryRoutes(app);
 }

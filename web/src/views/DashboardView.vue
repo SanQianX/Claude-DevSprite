@@ -86,9 +86,27 @@
       <div class="section review-section">
         <div class="section-header">
           <div class="section-title">AI 审查队列</div>
-          <button class="scan-btn" :disabled="scanning" @click="startScan">
-            {{ scanning ? '扫描中...' : '开始扫描' }}
-          </button>
+          <div class="scan-controls">
+            <label class="scan-toggle">
+              <input type="checkbox" v-model="autoScanEnabled" @change="toggleAutoScan" />
+              <span class="scan-toggle-label">定时扫描</span>
+            </label>
+            <select
+              v-if="autoScanEnabled"
+              class="scan-interval-select"
+              v-model="scanIntervalMinutes"
+              @change="updateScanInterval"
+            >
+              <option :value="5">5 分钟</option>
+              <option :value="10">10 分钟</option>
+              <option :value="15">15 分钟</option>
+              <option :value="30">30 分钟</option>
+              <option :value="60">1 小时</option>
+            </select>
+            <button class="scan-btn" :disabled="scanning" @click="startScan">
+              {{ scanning ? '扫描中...' : '开始扫描' }}
+            </button>
+          </div>
         </div>
         <div class="review-filters">
           <select class="filter-select" v-model="statusFilter">
@@ -200,6 +218,8 @@ const severityFilter = ref('all')
 const selectedReviewId = ref<number | null>(null)
 const scanning = ref(false)
 const analyzing = ref(false)
+const autoScanEnabled = ref(true)
+const scanIntervalMinutes = ref(10)
 
 const projectColor = ref('#f97316')
 const projectPath = ref('')
@@ -278,6 +298,22 @@ async function startScan() {
     console.error('Scan failed:', e)
   } finally {
     scanning.value = false
+  }
+}
+
+async function toggleAutoScan() {
+  try {
+    await dashboardStore.updateScannerConfig({ enabled: autoScanEnabled.value })
+  } catch (e) {
+    console.error('Failed to update scanner config:', e)
+  }
+}
+
+async function updateScanInterval() {
+  try {
+    await dashboardStore.updateScannerConfig({ intervalMs: scanIntervalMinutes.value * 60 * 1000 })
+  } catch (e) {
+    console.error('Failed to update scan interval:', e)
   }
 }
 
@@ -387,8 +423,11 @@ onMounted(async () => {
     }
   } catch { /* ignore */ }
 
-  // Fetch tasks and reviews from API
+  // Fetch tasks, reviews, and scanner config from API
   await dashboardStore.fetchAll(props.projectName)
+  await dashboardStore.fetchScannerConfig()
+  autoScanEnabled.value = dashboardStore.scannerConfig.enabled
+  scanIntervalMinutes.value = Math.round(dashboardStore.scannerConfig.intervalMs / 60000)
 })
 </script>
 
@@ -607,6 +646,42 @@ onMounted(async () => {
 
 .scan-btn:hover { background: #dbeafe; }
 .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.scan-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scan-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #475569;
+}
+
+.scan-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.scan-toggle-label {
+  user-select: none;
+}
+
+.scan-interval-select {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #475569;
+  background: #fff;
+  cursor: pointer;
+}
 
 .analyze-btn {
   padding: 6px 16px;

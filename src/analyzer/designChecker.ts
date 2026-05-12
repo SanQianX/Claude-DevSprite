@@ -79,19 +79,53 @@ const CODE_EXTENSIONS = /\.(ts|tsx|js|jsx|vue|svelte|py|java|go|rs|cs)$/;
 const MAX_SOURCE_FILES = 20;
 const MAX_SOURCE_SIZE = 300 * 1024; // 300KB total
 
+export interface ScannerConfig {
+  enabled: boolean;
+  intervalMs: number;
+  isScanning: boolean;
+}
+
 export class DesignChecker {
   private aiProvider: AIProvider;
   private scanIntervalMs: number;
   private scanTimer: ReturnType<typeof setInterval> | null = null;
   private isScanning = false;
+  private enabled = true;
 
   constructor(options?: { model?: string; scanIntervalMs?: number }) {
     this.aiProvider = new AIProvider({ model: options?.model });
     this.scanIntervalMs = options?.scanIntervalMs ?? 10 * 60 * 1000; // 10 minutes default
   }
 
+  getConfig(): ScannerConfig {
+    return {
+      enabled: this.enabled,
+      intervalMs: this.scanIntervalMs,
+      isScanning: this.isScanning,
+    };
+  }
+
+  updateConfig(config: { enabled?: boolean; intervalMs?: number }): void {
+    if (config.enabled !== undefined) {
+      this.enabled = config.enabled;
+    }
+    if (config.intervalMs !== undefined && config.intervalMs >= 60000) {
+      this.scanIntervalMs = config.intervalMs;
+    }
+    // Restart scanner with new config
+    this.stopScanner();
+    if (this.enabled) {
+      this.startScanner();
+    }
+    logger.info(`[DesignChecker] Config updated: enabled=${this.enabled}, interval=${this.scanIntervalMs}ms`);
+  }
+
   startScanner(): void {
     if (this.scanTimer) return;
+    if (!this.enabled) {
+      logger.info('[DesignChecker] Scanner disabled, not starting');
+      return;
+    }
     logger.info(`[DesignChecker] Starting background scanner (interval: ${this.scanIntervalMs}ms)`);
     this.scanTimer = setInterval(() => this.scanAllProjects(), this.scanIntervalMs);
     // Run initial scan after 30 seconds (delayed to let DB and projects initialize)

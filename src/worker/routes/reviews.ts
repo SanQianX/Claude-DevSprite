@@ -35,6 +35,28 @@ function getDesignChecker(): DesignChecker {
   return designChecker;
 }
 
+export function registerScannerConfigRoutes(app: Express): void {
+  /**
+   * GET /api/scanner/config
+   * Get current scanner configuration
+   */
+  app.get('/api/scanner/config', asyncHandler(async (_req: Request, res: Response) => {
+    const checker = getDesignChecker();
+    res.json(checker.getConfig());
+  }));
+
+  /**
+   * PUT /api/scanner/config
+   * Update scanner configuration (enabled, intervalMs)
+   */
+  app.put('/api/scanner/config', asyncHandler(async (req: Request, res: Response) => {
+    const { enabled, intervalMs } = req.body;
+    const checker = getDesignChecker();
+    checker.updateConfig({ enabled, intervalMs });
+    res.json({ message: '扫描配置已更新', config: checker.getConfig() });
+  }));
+}
+
 export function registerReviewRoutes(app: Express): void {
   /**
    * GET /api/projects/:name/reviews

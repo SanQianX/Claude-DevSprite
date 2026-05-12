@@ -105,4 +105,18 @@ export const dashboardApi = {
       `/reviews/${reviewId}/fix`
     ))
   },
+
+  // Scanner config
+  async getScannerConfig(): Promise<{ enabled: boolean; intervalMs: number; isScanning: boolean }> {
+    return unwrap(apiClient.get<{ enabled: boolean; intervalMs: number; isScanning: boolean }>(
+      '/scanner/config'
+    ))
+  },
+
+  async updateScannerConfig(config: { enabled?: boolean; intervalMs?: number }): Promise<{ config: { enabled: boolean; intervalMs: number; isScanning: boolean } }> {
+    return unwrap(apiClient.put<{ config: { enabled: boolean; intervalMs: number; isScanning: boolean } }>(
+      '/scanner/config',
+      config as Record<string, unknown>
+    ))
+  },
 }

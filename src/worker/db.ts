@@ -712,13 +712,20 @@ export class DatabaseManager {
   }
 
   /**
-   * Batch create reviews inside a transaction (used by codeReviewer)
+   * Batch create reviews inside a transaction (used by codeReviewer/designChecker)
+   * Uses raw run() instead of createReview() to avoid save() calling db.export()
+   * which interferes with the active SQL transaction in sql.js.
    */
   createReviewsBatch(reviews: Array<Omit<Review, 'id' | 'created_at' | 'updated_at' | 'resolved_at'>>): void {
     this.beginTransaction();
     try {
       for (const review of reviews) {
-        this.createReview(review);
+        const now = new Date().toISOString();
+        this.run(
+          `INSERT INTO reviews (project_id, title, severity, location, suggestion, source, status, commit_hash, file_path, line, category, description, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [review.project_id, review.title, review.severity, review.location || null, review.suggestion || null, review.source || 'ai', review.status, review.commit_hash || null, review.file_path || null, review.line || null, review.category || null, review.description || null, now, now]
+        );
       }
       this.commit();
     } catch (err) {
