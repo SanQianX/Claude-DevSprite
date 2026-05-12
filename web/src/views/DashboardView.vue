@@ -318,13 +318,25 @@ async function startScan() {
   scanning.value = true
   scanPhase.value = 'scan'
   try {
+    // Record existing pending review IDs before scan
+    const oldPendingIds = new Set(
+      dashboardStore.reviews
+        .filter(r => r.status === 'pending')
+        .map(r => r.id)
+    )
+
     const scanResult = await dashboardStore.triggerScan(props.projectName)
 
     // Auto-fix if enabled and there are findings
     if (autoFixAfterScan.value && scanResult.findingsCount > 0) {
+      // Find new review IDs (not in old set)
+      const newReviewIds = dashboardStore.reviews
+        .filter(r => r.status === 'pending' && !oldPendingIds.has(r.id))
+        .map(r => r.id)
+
       scanPhase.value = 'fix'
-      scanFixProgress.value = { fixed: 0, confirmed: 0, failed: 0, total: scanResult.findingsCount }
-      const fixResult = await dashboardStore.batchFixReviews(props.projectName)
+      scanFixProgress.value = { fixed: 0, confirmed: 0, failed: 0, total: newReviewIds.length }
+      const fixResult = await dashboardStore.batchFixReviews(props.projectName, newReviewIds)
       scanFixProgress.value = { fixed: fixResult.fixed, confirmed: fixResult.confirmed, failed: fixResult.failed, total: fixResult.fixed + fixResult.confirmed + fixResult.failed }
     }
   } catch (e) {

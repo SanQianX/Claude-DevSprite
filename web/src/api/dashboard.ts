@@ -106,9 +106,10 @@ export const dashboardApi = {
     ))
   },
 
-  async batchFixReviews(projectName: string): Promise<{ fixed: number; confirmed: number; failed: number; results: Array<{ id: number; action: string; title: string; error?: string }> }> {
+  async batchFixReviews(projectName: string, reviewIds?: number[]): Promise<{ fixed: number; confirmed: number; failed: number; results: Array<{ id: number; action: string; title: string; error?: string }> }> {
     return unwrap(apiClient.post<{ fixed: number; confirmed: number; failed: number; results: Array<{ id: number; action: string; title: string; error?: string }> }>(
-      `/projects/${encodeURIComponent(projectName)}/reviews/fix-batch`
+      `/projects/${encodeURIComponent(projectName)}/reviews/fix-batch`,
+      reviewIds ? { reviewIds } : undefined
     ))
   },
 

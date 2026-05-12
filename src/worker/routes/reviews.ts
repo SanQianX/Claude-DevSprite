@@ -15,13 +15,11 @@ import { getDatabase } from '../db';
 import { CodeReviewer } from '../../analyzer/codeReviewer';
 import { DesignChecker } from '../../analyzer/designChecker';
 import { createLogger } from '../../utils/logger';
-import { TaskManager } from '../services/taskManager';
 
 const logger = createLogger('reviews');
 
 let reviewer: CodeReviewer | null = null;
 let designChecker: DesignChecker | null = null;
-let taskManager: TaskManager | null = null;
 
 function getReviewer(): CodeReviewer {
   if (!reviewer) {
@@ -35,13 +33,6 @@ function getDesignChecker(): DesignChecker {
     designChecker = new DesignChecker();
   }
   return designChecker;
-}
-
-function getTaskManager(): TaskManager {
-  if (!taskManager) {
-    taskManager = new TaskManager();
-  }
-  return taskManager;
 }
 
 export function registerScannerConfigRoutes(app: Express): void {
@@ -140,20 +131,34 @@ export function registerReviewRoutes(app: Express): void {
 
   /**
    * POST /api/projects/:name/reviews/fix-batch
-   * Auto-fix all pending reviews for a project:
+   * Auto-fix reviews for a project:
+   *   - If reviewIds provided in body: only process those reviews
+   *   - If reviewIds not provided: process all pending reviews
    *   - Reviews with valid file_path: AI generates code fix
    *   - Reviews without valid file_path: mark as confirmed
    */
   app.post('/api/projects/:name/reviews/fix-batch', asyncHandler(async (req: Request, res: Response) => {
     const projectName = req.params.name;
+    const { reviewIds } = req.body || {};
 
     const db = await getDatabase();
     const project = db.getProject(projectName);
     if (!project) throw createError('Project not found', 404);
 
-    const pendingReviews = db.getPendingReviews(project.id);
-    if (pendingReviews.length === 0) {
-      res.json({ message: '没有待审批的问题', fixed: 0, confirmed: 0, failed: 0, results: [] });
+    // Determine which reviews to process
+    let reviewsToProcess;
+    if (Array.isArray(reviewIds) && reviewIds.length > 0) {
+      // Only process specified reviews
+      reviewsToProcess = reviewIds
+        .map((id: number) => db.getReview(id))
+        .filter((r: any): r is NonNullable<typeof r> => r != null && r.project_id === project.id);
+    } else {
+      // Process all pending reviews
+      reviewsToProcess = db.getPendingReviews(project.id);
+    }
+
+    if (reviewsToProcess.length === 0) {
+      res.json({ message: '没有待处理的问题', fixed: 0, confirmed: 0, failed: 0, results: [] });
       return;
     }
 
@@ -162,7 +167,7 @@ export function registerReviewRoutes(app: Express): void {
     let confirmed = 0;
     let failed = 0;
 
-    for (const review of pendingReviews) {
+    for (const review of reviewsToProcess) {
       try {
         // Check if file_path is valid
         const isValidFilePath = review.file_path
@@ -296,21 +301,6 @@ export function registerReviewRoutes(app: Express): void {
 
     // Mark review as fixed
     db.updateReview(id, { status: 'fixed', resolved_at: new Date().toISOString() });
-
-    // Auto-create task for the fix
-    try {
-      const taskManager = getTaskManager();
-      await taskManager.create({
-        title: `修复审查: ${review.title}`,
-        description: fix.explanation,
-        reviewId: review.id,
-        filePath: review.file_path,
-      });
-      logger.info(`Task created for review ${id}`);
-    } catch (taskError) {
-      // Log error but don't fail the response
-      logger.error(`Failed to create task for review ${id}`, taskError);
-    }
 
     res.json({
       message: '修复已应用',

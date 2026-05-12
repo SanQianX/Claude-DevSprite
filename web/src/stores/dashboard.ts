@@ -88,8 +88,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     return result
   }
 
-  async function batchFixReviews(projectName: string) {
-    const result = await dashboardApi.batchFixReviews(projectName)
+  async function batchFixReviews(projectName: string, reviewIds?: number[]) {
+    const result = await dashboardApi.batchFixReviews(projectName, reviewIds)
     await fetchReviews(projectName)
     return result
   }
