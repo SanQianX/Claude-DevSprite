@@ -211,7 +211,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
 import { analysisApi } from '@/api/analysis'
@@ -232,8 +232,13 @@ const selectedReviewId = ref<number | null>(null)
 const scanning = ref(false)
 const scanPhase = ref<'scan' | 'fix'>('scan')
 const scanFixProgress = ref({ fixed: 0, confirmed: 0, failed: 0, total: 0 })
-const autoFixAfterScan = ref(false)
+const autoFixAfterScan = ref(localStorage.getItem(`autofix-${props.projectName}`) === 'true')
 const analyzing = ref(false)
+
+// Persist autoFix checkbox state
+watch(autoFixAfterScan, (val) => {
+  localStorage.setItem(`autofix-${props.projectName}`, String(val))
+})
 const autoScanEnabled = ref(true)
 const scanIntervalMinutes = ref(10)
 
@@ -300,10 +305,6 @@ const scanStatusText = computed(() => {
   const p = scanFixProgress.value
   return `修复中 ${p.fixed + p.confirmed + p.failed}/${p.total}...`
 })
-
-function approveReview(id: number) {
-  dashboardStore.approveReview(props.projectName, id)
-}
 
 async function fixReview(id: number) {
   try {
@@ -469,6 +470,11 @@ onMounted(async () => {
   await dashboardStore.fetchScannerConfig()
   autoScanEnabled.value = dashboardStore.scannerConfig.enabled
   scanIntervalMinutes.value = Math.round(dashboardStore.scannerConfig.intervalMs / 60000)
+
+  // Restore scanning state from backend
+  if (dashboardStore.scannerConfig.isScanning) {
+    scanning.value = true
+  }
 })
 </script>
 
