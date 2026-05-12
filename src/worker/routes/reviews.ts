@@ -131,7 +131,10 @@ export function registerReviewRoutes(app: Express): void {
 
   /**
    * POST /api/reviews/:id/fix
-   * Generate an AI fix for a review finding and apply it
+   * Handle review action based on source and type:
+   *   - source='ai' with file_path: AI generates code fix
+   *   - source='design-check' with file_path: AI generates code fix
+   *   - source='design-check' without file_path: confirm the issue (no auto-fix)
    */
   app.post('/api/reviews/:id/fix', asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id, 10);
@@ -140,15 +143,35 @@ export function registerReviewRoutes(app: Express): void {
     const db = await getDatabase();
     const review = db.getReview(id);
     if (!review) throw createError('Review not found', 404);
-    if (!review.file_path) throw createError('Review has no associated file', 400);
 
     const project = db.getProjectById(review.project_id);
     if (!project) throw createError('Project not found', 404);
 
+    // Case 1: No file_path or file_path is not a real code file → confirm the issue
+    const isValidFilePath = review.file_path
+      && /\.(ts|tsx|js|jsx|vue|svelte|py|java|go|rs|cs|css|scss|html|json|yaml|yml|md)$/.test(review.file_path)
+      && fs.existsSync(path.join(project.path, review.file_path));
+
+    if (!isValidFilePath) {
+      db.updateReview(id, {
+        status: 'confirmed',
+        resolved_at: new Date().toISOString(),
+      });
+      res.json({
+        message: '问题已确认',
+        explanation: `已标记为"已确认"。${review.file_path ? `文件 "${review.file_path}" 不存在或不是代码文件，` : ''}该问题涉及 ${review.category || '设计层面'}，需要手动处理。`,
+        action: 'confirmed',
+        review: db.getReview(id),
+      });
+      return;
+    }
+
+    // Case 2: Has valid file_path → AI generates code fix
+    const filePath = review.file_path!;
     const codeReviewer = getReviewer();
     const fix = await codeReviewer.generateFix(
       project.path,
-      review.file_path,
+      filePath,
       {
         title: review.title,
         description: review.description || review.title,
@@ -161,7 +184,7 @@ export function registerReviewRoutes(app: Express): void {
     }
 
     // Write the fixed content
-    const fullPath = path.join(project.path, review.file_path);
+    const fullPath = path.join(project.path, filePath);
 
     // Security: check path traversal
     const resolvedPath = path.resolve(fullPath);
@@ -181,6 +204,7 @@ export function registerReviewRoutes(app: Express): void {
     res.json({
       message: '修复已应用',
       explanation: fix.explanation,
+      action: 'fixed',
       review: db.getReview(id),
     });
   }));

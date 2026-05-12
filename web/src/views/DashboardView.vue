@@ -114,6 +114,7 @@
             <option value="pending">待审批</option>
             <option value="approved">已批准</option>
             <option value="fixed">已修复</option>
+            <option value="confirmed">已确认</option>
             <option value="ignored">已忽略</option>
           </select>
           <select class="filter-select" v-model="severityFilter">
@@ -133,6 +134,7 @@
             待审批: <span>{{ reviewStats.pending }}</span> |
             已批准: <span>{{ reviewStats.approved }}</span> |
             已修复: <span>{{ reviewStats.fixed }}</span> |
+            已确认: <span>{{ reviewStats.confirmed }}</span> |
             已忽略: <span>{{ reviewStats.ignored }}</span>
           </div>
         </div>
@@ -162,10 +164,17 @@
           <div class="review-footer">
             <div class="review-time">{{ formatTime(review.created_at) }}</div>
             <div class="review-actions">
-              <button class="btn btn-approve" @click.stop="fixReview(review.id)">批准修复</button>
+              <button class="btn btn-approve" @click.stop="fixReview(review.id)">
+                {{ getFixButtonText(review) }}
+              </button>
               <button class="btn btn-ignore" @click.stop="ignoreReview(review.id)">忽略</button>
               <button class="btn btn-discuss" @click.stop="discussReview(review)">讨论</button>
-              <button class="btn btn-locate" @click.stop="locateReview(review)">定位</button>
+              <button
+                class="btn btn-locate"
+                :disabled="!review.location"
+                :class="{ 'btn-disabled': !review.location }"
+                @click.stop="review.location && locateReview(review)"
+              >定位</button>
             </div>
           </div>
           <!-- Expanded Detail -->
@@ -275,6 +284,7 @@ const reviewStats = computed(() => ({
   pending: reviews.value.filter(r => r.status === 'pending').length,
   approved: reviews.value.filter(r => r.status === 'approved').length,
   fixed: reviews.value.filter(r => r.status === 'fixed').length,
+  confirmed: reviews.value.filter(r => r.status === 'confirmed').length,
   ignored: reviews.value.filter(r => r.status === 'ignored').length,
 }))
 
@@ -369,6 +379,15 @@ function toggleReviewDetail(reviewId: number) {
 function resetFilters() {
   statusFilter.value = 'all'
   severityFilter.value = 'all'
+}
+
+function getFixButtonText(review: Review): string {
+  if (review.source === 'design-check') {
+    if (!review.location) {
+      return review.category === 'unrecorded' ? '更新文档' : '确认问题'
+    }
+  }
+  return '批准修复'
 }
 
 function formatTime(dateStr: string): string {
@@ -860,6 +879,8 @@ onMounted(async () => {
 .btn-locate:hover { background: #ede9fe; }
 .btn-discuss { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
 .btn-discuss:hover { background: #dbeafe; }
+.btn-disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-disabled:hover { background: inherit; }
 
 /* Dialog */
 .dialog-overlay {

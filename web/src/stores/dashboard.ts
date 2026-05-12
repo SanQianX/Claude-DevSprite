@@ -75,7 +75,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const result = await dashboardApi.fixReview(reviewId)
     const review = reviews.value.find(r => r.id === reviewId)
     if (review) {
-      review.status = 'fixed'
+      // Backend may return 'fixed' or 'confirmed' depending on review type
+      review.status = result.action === 'confirmed' ? 'confirmed' : 'fixed'
       review.resolved_at = new Date().toISOString()
     }
     return result
