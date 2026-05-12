@@ -93,4 +93,16 @@ export const dashboardApi = {
       `/projects/${encodeURIComponent(projectName)}/reviews/${reviewId}`
     ))
   },
+
+  async triggerScan(projectName: string): Promise<{ findingsCount: number }> {
+    return unwrap(apiClient.post<{ findingsCount: number }>(
+      `/projects/${encodeURIComponent(projectName)}/reviews/scan`
+    ))
+  },
+
+  async fixReview(reviewId: number): Promise<{ explanation: string }> {
+    return unwrap(apiClient.post<{ explanation: string }>(
+      `/reviews/${reviewId}/fix`
+    ))
+  },
 }

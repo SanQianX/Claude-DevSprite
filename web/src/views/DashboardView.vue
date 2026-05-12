@@ -27,6 +27,9 @@
             <div class="stat-value">{{ stats.lastAnalysis }}</div>
             <div class="stat-label">上次分析</div>
           </div>
+          <button class="analyze-btn" :disabled="analyzing" @click="startAnalysis">
+            {{ analyzing ? '分析中...' : '开始分析' }}
+          </button>
         </div>
       </div>
 
@@ -83,12 +86,16 @@
       <div class="section review-section">
         <div class="section-header">
           <div class="section-title">AI 审查队列</div>
+          <button class="scan-btn" :disabled="scanning" @click="startScan">
+            {{ scanning ? '扫描中...' : '开始扫描' }}
+          </button>
         </div>
         <div class="review-filters">
           <select class="filter-select" v-model="statusFilter">
             <option value="all">全部</option>
             <option value="pending">待审批</option>
             <option value="approved">已批准</option>
+            <option value="fixed">已修复</option>
             <option value="ignored">已忽略</option>
           </select>
           <select class="filter-select" v-model="severityFilter">
@@ -107,6 +114,7 @@
           <div class="review-counts">
             待审批: <span>{{ reviewStats.pending }}</span> |
             已批准: <span>{{ reviewStats.approved }}</span> |
+            已修复: <span>{{ reviewStats.fixed }}</span> |
             已忽略: <span>{{ reviewStats.ignored }}</span>
           </div>
         </div>
@@ -136,7 +144,7 @@
           <div class="review-footer">
             <div class="review-time">{{ formatTime(review.created_at) }}</div>
             <div class="review-actions">
-              <button class="btn btn-approve" @click.stop="approveReview(review.id)">批准修复</button>
+              <button class="btn btn-approve" @click.stop="fixReview(review.id)">批准修复</button>
               <button class="btn btn-ignore" @click.stop="ignoreReview(review.id)">忽略</button>
               <button class="btn btn-discuss" @click.stop="discussReview(review)">讨论</button>
               <button class="btn btn-locate" @click.stop="locateReview(review)">定位</button>
@@ -175,6 +183,7 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
+import { analysisApi } from '@/api/analysis'
 import type { Task, Review } from '@/api/dashboard'
 
 const props = defineProps<{
@@ -189,6 +198,8 @@ const newTaskTitle = ref('')
 const statusFilter = ref('all')
 const severityFilter = ref('all')
 const selectedReviewId = ref<number | null>(null)
+const scanning = ref(false)
+const analyzing = ref(false)
 
 const projectColor = ref('#f97316')
 const projectPath = ref('')
@@ -243,11 +254,42 @@ const filteredReviews = computed(() => {
 const reviewStats = computed(() => ({
   pending: reviews.value.filter(r => r.status === 'pending').length,
   approved: reviews.value.filter(r => r.status === 'approved').length,
+  fixed: reviews.value.filter(r => r.status === 'fixed').length,
   ignored: reviews.value.filter(r => r.status === 'ignored').length,
 }))
 
 function approveReview(id: number) {
   dashboardStore.approveReview(props.projectName, id)
+}
+
+async function fixReview(id: number) {
+  try {
+    await dashboardStore.fixReview(props.projectName, id)
+  } catch (e) {
+    console.error('Fix failed:', e)
+  }
+}
+
+async function startScan() {
+  scanning.value = true
+  try {
+    await dashboardStore.triggerScan(props.projectName)
+  } catch (e) {
+    console.error('Scan failed:', e)
+  } finally {
+    scanning.value = false
+  }
+}
+
+async function startAnalysis() {
+  analyzing.value = true
+  try {
+    await analysisApi.triggerFullAnalysis(props.projectName)
+  } catch (e) {
+    console.error('Analysis failed:', e)
+  } finally {
+    analyzing.value = false
+  }
 }
 
 function ignoreReview(id: number) {
@@ -551,6 +593,35 @@ onMounted(async () => {
 .add-btn:hover { background: #dbeafe; }
 
 .review-section { margin-bottom: 0; }
+
+.scan-btn {
+  padding: 5px 14px;
+  background: #eff6ff;
+  color: #3b82f6;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.scan-btn:hover { background: #dbeafe; }
+.scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.analyze-btn {
+  padding: 6px 16px;
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.analyze-btn:hover { background: #6d28d9; }
+.analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .review-filters {
   display: flex;
