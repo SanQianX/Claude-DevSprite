@@ -13,17 +13,26 @@ import * as path from 'path';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { getDatabase } from '../db';
 import { CodeReviewer } from '../../analyzer/codeReviewer';
+import { DesignChecker } from '../../analyzer/designChecker';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('reviews');
 
 let reviewer: CodeReviewer | null = null;
+let designChecker: DesignChecker | null = null;
 
 function getReviewer(): CodeReviewer {
   if (!reviewer) {
     reviewer = new CodeReviewer();
   }
   return reviewer;
+}
+
+function getDesignChecker(): DesignChecker {
+  if (!designChecker) {
+    designChecker = new DesignChecker();
+  }
+  return designChecker;
 }
 
 export function registerReviewRoutes(app: Express): void {
@@ -57,11 +66,11 @@ export function registerReviewRoutes(app: Express): void {
     const project = db.getProject(projectName);
     if (!project) throw createError('Project not found', 404);
 
-    const codeReviewer = getReviewer();
-    const findingsCount = await codeReviewer.scanProject(project.id, project.path, project.name);
+    const checker = getDesignChecker();
+    const findingsCount = await checker.scanProject(project.id, project.path, project.name);
 
     res.json({
-      message: `扫描完成，发现 ${findingsCount} 个问题`,
+      message: `功能一致性扫描完成，发现 ${findingsCount} 个不一致`,
       findingsCount,
     });
   }));

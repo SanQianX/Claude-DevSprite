@@ -5,7 +5,7 @@
 
 import { startServer } from './server';
 import { logger } from '../utils/logger';
-import { CodeReviewer } from '../analyzer/codeReviewer';
+import { DesignChecker } from '../analyzer/designChecker';
 import { closeDatabase } from './db';
 
 // Catch unhandled promise rejections to prevent crash
@@ -39,10 +39,10 @@ export async function startWorker(): Promise<void> {
   try {
     await startServer();
 
-    // Start background code review scanner
-    const reviewer = new CodeReviewer({ scanIntervalMs: 5 * 60 * 1000 });
-    reviewer.startScanner();
-    logger.info('Code review background scanner started');
+    // Start background design consistency checker
+    const designChecker = new DesignChecker({ scanIntervalMs: 10 * 60 * 1000 });
+    designChecker.startScanner();
+    logger.info('Design consistency checker background scanner started');
   } catch (error) {
     logger.error('Failed to start worker', error);
     process.exit(1);
