@@ -38,7 +38,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { marked, Marked, Renderer } from 'marked'
+import { Marked } from 'marked'
 import DOMPurify from 'dompurify'
 
 const props = withDefaults(defineProps<{
@@ -70,19 +70,13 @@ const docBodyRef = ref<HTMLElement | null>(null)
 // Local marked instance to avoid global mutation
 const localMarked = new Marked()
 
-// Custom renderer to convert [source:path:line] to clickable links
-const renderer = new Renderer()
-renderer.paragraph = function (tokens: any) {
-  let text = this.parser.parseInline(tokens) as string
-  // Replace [source:path:line] patterns with clickable links
-  text = text.replace(
+// Post-process to convert [source:path:line] to clickable links
+function processSourceLinks(html: string): string {
+  return html.replace(
     /\[source:([^\]]+?):(\d+)\]/g,
     '<a class="source-link" data-path="$1" data-line="$2" href="#">📍 $1:$2</a>'
   )
-  return `<p>${text}</p>`
 }
-
-localMarked.use({ renderer })
 
 async function fetchDocuments() {
   loading.value = true
@@ -90,7 +84,9 @@ async function fetchDocuments() {
     const res = await fetch(`/api/projects/${encodeURIComponent(props.projectName)}/tree`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    if (data.tree?.children) {
+    if (Array.isArray(data.tree)) {
+      documents.value = flattenTree(data.tree)
+    } else if (data.tree?.children) {
       documents.value = flattenTree(data.tree.children)
     }
   } catch (err) {
@@ -130,7 +126,8 @@ async function selectDoc(doc: DocItem) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     if (data.content) {
-      renderedContent.value = DOMPurify.sanitize(localMarked.parse(data.content) as string)
+      const rawHtml = localMarked.parse(data.content) as string
+      renderedContent.value = DOMPurify.sanitize(processSourceLinks(rawHtml))
       await nextTick()
       bindSourceLinks()
     }
