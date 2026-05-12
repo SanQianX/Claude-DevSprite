@@ -43,8 +43,9 @@
           <table v-else class="project-table">
             <thead>
               <tr>
-                <th style="width:38%">{{ t('home.title') }}</th>
-                <th style="width:10%">{{ t('project.repoType') }}</th>
+                <th style="width:32%">{{ t('home.title') }}</th>
+                <th style="width:8%">{{ t('project.repoType') }}</th>
+                <th style="width:8%;text-align:center">{{ t('project.docs') || 'Docs' }}</th>
                 <th style="width:22%">{{ t('project.lastUpdate') }}</th>
                 <th style="width:12%;text-align:center">{{ t('project.status') }}</th>
                 <th style="width:8%"></th>

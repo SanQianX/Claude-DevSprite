@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useSearchStore } from '@/stores/search'
@@ -94,9 +94,9 @@ onMounted(() => {
   analysisStore.connectSSE()
 })
 
-onUnmounted(() => {
-  analysisStore.disconnectSSE()
-})
+// Don't disconnect SSE on unmount — the store is global and the connection
+// should persist across page navigations. connectSSE() already handles
+// closing any existing connection before creating a new one.
 </script>
 
 <style scoped>

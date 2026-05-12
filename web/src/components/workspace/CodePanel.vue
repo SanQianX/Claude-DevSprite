@@ -107,6 +107,7 @@ const highlightedLine = ref(0)
 const relatedDocs = ref<RelatedDoc[]>([])
 const loadingRelated = ref(false)
 const codeBodyRef = ref<HTMLElement | null>(null)
+const fileRequestCounter = ref(0)
 
 async function fetchTree() {
   loading.value = true
@@ -124,6 +125,7 @@ async function fetchTree() {
 }
 
 async function loadFile(filePath: string, line: number = 0) {
+  const reqId = ++fileRequestCounter.value
   loadingFile.value = true
   try {
     const res = await fetch(
@@ -131,8 +133,7 @@ async function loadFile(filePath: string, line: number = 0) {
     )
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    if (data.content) {
-      // Find the node in tree
+    if (data.content && reqId === fileRequestCounter.value) {
       const node = findNodeInTree(tree.value, filePath)
       currentFile.value = node || { name: filePath.split('/').pop() || filePath, path: filePath, type: 'file' }
       codeContent.value = data.content
@@ -148,11 +149,15 @@ async function loadFile(filePath: string, line: number = 0) {
       fetchRelatedDocs(filePath)
     }
   } catch (err) {
-    console.error('Failed to load file:', err)
-    codeContent.value = '// 加载文件失败'
-    codeLines.value = ['// 加载文件失败']
+    if (reqId === fileRequestCounter.value) {
+      console.error('Failed to load file:', err)
+      codeContent.value = '// 加载文件失败'
+      codeLines.value = ['// 加载文件失败']
+    }
   } finally {
-    loadingFile.value = false
+    if (reqId === fileRequestCounter.value) {
+      loadingFile.value = false
+    }
   }
 }
 
@@ -193,7 +198,9 @@ function scrollToLine(line: number) {
 }
 
 async function selectFile(node: TreeNode) {
+  const reqId = ++fileRequestCounter.value
   currentFile.value = node
+  highlightedLine.value = 0
   emit('fileSelect', node.path)
   loadingFile.value = true
 
@@ -203,17 +210,21 @@ async function selectFile(node: TreeNode) {
     )
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    if (data.content) {
+    if (data.content && reqId === fileRequestCounter.value) {
       codeContent.value = data.content
       codeLines.value = data.content.split('\n')
       fetchRelatedDocs(node.path)
     }
   } catch (err) {
-    console.error('Failed to load file:', err)
-    codeContent.value = '// 加载文件失败'
-    codeLines.value = ['// 加载文件失败']
+    if (reqId === fileRequestCounter.value) {
+      console.error('Failed to load file:', err)
+      codeContent.value = '// 加载文件失败'
+      codeLines.value = ['// 加载文件失败']
+    }
   } finally {
-    loadingFile.value = false
+    if (reqId === fileRequestCounter.value) {
+      loadingFile.value = false
+    }
   }
 }
 
