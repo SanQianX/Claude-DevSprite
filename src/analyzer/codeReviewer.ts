@@ -25,7 +25,7 @@ import { AIProvider } from './aiProvider';
 import { DiffCollector } from './diffCollector';
 import { getDatabase } from '../worker/db';
 import { createLogger } from '../utils/logger';
-import { Request, Response } from 'express'; // 新增：导入Express类型
+import { Request, Response, Router } from 'express'; // 新增：导入Express Router
 
 const logger = createLogger('code-reviewer');
 
@@ -394,17 +394,30 @@ export class CodeReviewer {
 }
 
 /**
- * Create an Express route handler for POST /reviews/:id/fix
- * This factory function creates the route handler and returns it, allowing it to be mounted
- * in the main application router (e.g., in src/worker/routes.ts or a dedicated reviews.ts).
+ * Create an Express router with all review-related API endpoints.
+ * This function encapsulates the route definitions, aligning them with the design document.
  * 
- * Usage example in a router file:
- * import { CodeReviewer, createFixRouteHandler } from '../analyzer/codeReviewer';
+ * **路由说明 (对应审查意见):**
+ * - **POST /reviews/:id/fix**: 已实现。调用 `CodeReviewer.generateFix` 方法，处理修复请求。
+ * - **PUT /reviews/:id/approve** 和 **PUT /reviews/:id/ignore**: 未实现。根据设计文档，这些是死代码，前端从未调用。
+ *   因此，本路由器不提供这两个端点。如果未来需要，可以按需添加。
+ * 
+ * **使用方式:**
+ * 在主应用（如 src/worker/app.ts）中导入并挂载此路由器：
+ * ```typescript
+ * import { CodeReviewer } from '../analyzer/codeReviewer';
+ * import { createReviewsRouter } from '../analyzer/codeReviewer'; // 或从此处导出
+ * 
  * const reviewer = new CodeReviewer();
- * router.post('/reviews/:id/fix', createFixRouteHandler(reviewer));
+ * const reviewsRouter = createReviewsRouter(reviewer);
+ * app.use('/api', reviewsRouter); // 挂载后，端点路径变为 /api/reviews/:id/fix
+ * ```
  */
-export function createFixRouteHandler(reviewer: CodeReviewer) {
-  return async (req: Request, res: Response) => {
+export function createReviewsRouter(reviewer: CodeReviewer): Router {
+  const router = Router();
+
+  // POST /reviews/:id/fix
+  router.post('/reviews/:id/fix', async (req: Request, res: Response) => {
     const { id } = req.params;
     const reviewId = parseInt(id, 10);
 
@@ -451,5 +464,12 @@ export function createFixRouteHandler(reviewer: CodeReviewer) {
       logger.error(`[Fix Route] Error processing fix for review ${id}:`, error);
       res.status(500).json({ error: 'Internal server error' });
     }
-  };
+  });
+
+  // TODO: 如果未来需要，可以添加其他端点，如：
+  // router.put('/reviews/:id/approve', async (req, res) => { ... });
+  // router.put('/reviews/:id/ignore', async (req, res) => { ... });
+  // 但根据审查意见，它们目前是死代码，因此不予实现。
+
+  return router;
 }
