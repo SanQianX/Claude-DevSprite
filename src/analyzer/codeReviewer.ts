@@ -1,6 +1,9 @@
 /**
  * AI Code Reviewer
  * Scans code changes, generates review findings, and manages the review queue
+ *
+ * TODO: 根据设计文档，DevChat的实时聊天功能（WebSocket通信）应在其他模块（如 `src/worker/wsHandler.ts`）中实现，
+ *       以分离实时通信与代码审查的核心分析职责。本模块专注于异步的、基于AI的代码分析和审查。
  */
 
 import * as fs from 'fs';
@@ -271,7 +274,7 @@ export class CodeReviewer {
     projectPath: string,
     filePath: string,
     finding: { title: string; description: string; suggestion?: string },
-    reviewId?: string
+    reviewId?: number
   ): Promise<{ fixedContent: string; explanation: string } | null> {
     const fullPath = path.join(projectPath, filePath);
     if (!fs.existsSync(fullPath)) return null;
@@ -296,7 +299,7 @@ export class CodeReviewer {
         logger.info(`[CodeReviewer] Fixed file ${filePath}`);
 
         // Update database status if reviewId provided
-        if (reviewId) {
+        if (reviewId != null && typeof reviewId === 'number') {
           try {
             const db = await getDatabase();
             db.updateReview(reviewId, { status: 'fixed' });
