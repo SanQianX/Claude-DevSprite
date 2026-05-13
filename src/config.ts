@@ -1,21 +1,27 @@
 import * as path from 'path';
 import * as os from 'os';
 
-/** Configuration for project discovery. */
+/**
+ * Configuration for project discovery.
+ * Defines how the system scans for and discovers projects in the file system.
+ */
 export interface ProjectDiscoveryConfig {
   /** Directories to scan for projects */
   scanPaths: string[];
-  /** Patterns to identify project repositories */
+  /** Patterns to identify project repositories (e.g., presence of .git directory) */
   repoPatterns: string[];
   /** Knowledge directory name within each project */
   knowledgeDirName: string;
-  /** Auto-discover on startup */
+  /** Whether to automatically discover projects on system startup */
   autoDiscover: boolean;
-  /** Maximum scan depth */
+  /** Maximum directory depth to scan when searching for projects */
   maxDepth: number;
 }
 
-/** Configuration for the server. */
+/**
+ * Configuration for the server.
+ * Defines the network binding parameters for the backend server.
+ */
 export interface ServerConfig {
   /** Port to listen on */
   port: number;
@@ -23,7 +29,10 @@ export interface ServerConfig {
   host: string;
 }
 
-/** Configuration for the knowledge base. */
+/**
+ * Configuration for the knowledge base.
+ * Controls how the system manages and commits knowledge base updates.
+ */
 export interface KnowledgeConfig {
   /** Name of the knowledge directory within projects */
   directoryName: string;
@@ -33,7 +42,10 @@ export interface KnowledgeConfig {
   commitMessageTemplate: string;
 }
 
-/** Configuration for analysis processes. */
+/**
+ * Configuration for analysis processes.
+ * Defines parameters for code analysis, including triggers, limits, and retry behavior.
+ */
 export interface AnalysisConfig {
   /** Analysis mode: incremental or full */
   mode: 'incremental' | 'full';
@@ -43,7 +55,7 @@ export interface AnalysisConfig {
   fullAnalysisTriggers: {
     /** Threshold of new files to trigger full analysis */
     newFilesThreshold: number;
-    /** File patterns for dependency files */
+    /** File patterns for dependency files (e.g., package.json, requirements.txt) */
     dependencyFilePatterns: string[];
     /** Keywords in commit messages to trigger full analysis */
     commitMessageKeywords: string[];
@@ -56,7 +68,10 @@ export interface AnalysisConfig {
   retryBaseDelayMs: number;
 }
 
-/** Configuration for detection strategies. */
+/**
+ * Configuration for detection strategies.
+ * Defines which strategy to use for detecting file changes (hook, watcher, or poller).
+ */
 export interface DetectionConfig {
   /** Preferred detection strategy */
   preferredStrategy: 'hook' | 'watcher' | 'poller';
@@ -68,7 +83,10 @@ export interface DetectionConfig {
   dedupWindowMs: number;
 }
 
-/** Configuration for web interface. */
+/**
+ * Configuration for web interface.
+ * Controls whether the web UI is enabled and its behavior on startup.
+ */
 export interface WebConfig {
   /** Whether web interface is enabled */
   enabled: boolean;
@@ -76,7 +94,10 @@ export interface WebConfig {
   autoOpen: boolean;
 }
 
-/** Configuration for logging. */
+/**
+ * Configuration for logging.
+ * Defines log level and optional log file output.
+ */
 export interface LoggingConfig {
   /** Logging level */
   level: 'debug' | 'info' | 'warn' | 'error';
@@ -84,7 +105,10 @@ export interface LoggingConfig {
   file?: string;
 }
 
-/** Main configuration interface for the system, stored in config.json. */
+/**
+ * Main configuration interface for the system, stored in config.json.
+ * This is the top-level structure that contains all sub-configurations.
+ */
 export interface Config {
   /** Server configuration */
   server: ServerConfig;
