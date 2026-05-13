@@ -14,6 +14,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../../config';
 import { dbPath } from '../../config';
 import { createLogger } from '../../utils/logger';
+import { resetAgentSingletons } from './reviews';
 
 const logger = createLogger('config');
 
@@ -51,7 +52,12 @@ function maskApiKey(key: string): string {
 /**
  * Load current AI config from env file, process env, and config override
  */
-function loadAIConfig(): { model: string; baseUrl: string; hasApiKey: boolean; maskedApiKey: string; maxRetries: number; scannerModel: string; fixerModel: string } {
+function loadAIConfig(): {
+  model: string; baseUrl: string; hasApiKey: boolean; maskedApiKey: string; maxRetries: number;
+  scannerModel: string; fixerModel: string;
+  scanner?: { model?: string; apiKey?: string; maskedApiKey?: string; baseUrl?: string };
+  fixer?: { model?: string; apiKey?: string; maskedApiKey?: string; baseUrl?: string };
+} {
   let model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
   let baseUrl = process.env.ANTHROPIC_BASE_URL || '';
   let apiKey = process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '';
@@ -88,13 +94,31 @@ function loadAIConfig(): { model: string; baseUrl: string; hasApiKey: boolean; m
   if (override.ai?.fixerModel) fixerModel = override.ai.fixerModel;
   if (override.analysis?.maxRetries) maxRetries = override.analysis.maxRetries;
 
-  return { model, baseUrl, hasApiKey: !!apiKey, maskedApiKey: maskApiKey(apiKey), maxRetries, scannerModel, fixerModel };
+  // Per-agent config
+  const scannerAgent = override.ai?.scanner;
+  const fixerAgent = override.ai?.fixer;
+
+  const scanner = scannerAgent ? {
+    model: scannerAgent.model,
+    apiKey: scannerAgent.apiKey,
+    maskedApiKey: maskApiKey(scannerAgent.apiKey || ''),
+    baseUrl: scannerAgent.baseUrl,
+  } : undefined;
+
+  const fixer = fixerAgent ? {
+    model: fixerAgent.model,
+    apiKey: fixerAgent.apiKey,
+    maskedApiKey: maskApiKey(fixerAgent.apiKey || ''),
+    baseUrl: fixerAgent.baseUrl,
+  } : undefined;
+
+  return { model, baseUrl, hasApiKey: !!apiKey, maskedApiKey: maskApiKey(apiKey), maxRetries, scannerModel, fixerModel, scanner, fixer };
 }
 
 /**
  * Save AI config to both the env file and config override
  */
-function saveAIConfig(model: string, baseUrl: string, apiKey: string, maxRetries: number, scannerModel?: string, fixerModel?: string): void {
+function saveAIConfig(model: string, baseUrl: string, apiKey: string, maxRetries: number, scannerModel?: string, fixerModel?: string, agentConfigs?: { scanner?: { model?: string; apiKey?: string; baseUrl?: string }; fixer?: { model?: string; apiKey?: string; baseUrl?: string } }): void {
   // If apiKey is empty, keep the existing one from env/process
   const currentConfig = loadAIConfigFromEnv();
   const effectiveApiKey = apiKey || currentConfig.apiKey || process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '';
@@ -130,6 +154,23 @@ function saveAIConfig(model: string, baseUrl: string, apiKey: string, maxRetries
   };
   if (scannerModel !== undefined) current.ai.scannerModel = scannerModel;
   if (fixerModel !== undefined) current.ai.fixerModel = fixerModel;
+
+  // Per-agent config (save keys and baseUrls only, not masked)
+  if (agentConfigs?.scanner) {
+    current.ai.scanner = {
+      model: agentConfigs.scanner.model,
+      apiKey: agentConfigs.scanner.apiKey || current.ai.scanner?.apiKey,
+      baseUrl: agentConfigs.scanner.baseUrl,
+    };
+  }
+  if (agentConfigs?.fixer) {
+    current.ai.fixer = {
+      model: agentConfigs.fixer.model,
+      apiKey: agentConfigs.fixer.apiKey || current.ai.fixer?.apiKey,
+      baseUrl: agentConfigs.fixer.baseUrl,
+    };
+  }
+
   current.analysis = {
     ...current.analysis,
     maxRetries,
@@ -258,6 +299,8 @@ export function registerConfigRoutes(app: Express): void {
         maxRetries: aiConfig.maxRetries,
         scannerModel: aiConfig.scannerModel,
         fixerModel: aiConfig.fixerModel,
+        scanner: aiConfig.scanner,
+        fixer: aiConfig.fixer,
       },
       dbPath: dbPath.replace(process.env.HOME || process.env.USERPROFILE || '', '~'),
     };
@@ -274,9 +317,9 @@ export function registerConfigRoutes(app: Express): void {
    */
   app.post('/api/config/ai', (req: Request, res: Response) => {
     try {
-      const { model, baseUrl, apiKey, maxRetries, scannerModel, fixerModel } = req.body;
+      const { model, baseUrl, apiKey, maxRetries, scannerModel, fixerModel, scanner, fixer } = req.body;
 
-      if (!model && !baseUrl && apiKey === undefined && maxRetries === undefined && scannerModel === undefined && fixerModel === undefined) {
+      if (!model && !baseUrl && apiKey === undefined && maxRetries === undefined && scannerModel === undefined && fixerModel === undefined && !scanner && !fixer) {
         res.status(400).json({ status: 'error', message: 'No AI config fields provided' });
         return;
       }
@@ -290,9 +333,12 @@ export function registerConfigRoutes(app: Express): void {
         maxRetries ?? current.maxRetries,
         scannerModel ?? current.scannerModel,
         fixerModel ?? current.fixerModel,
+        { scanner, fixer },
       );
 
       const updated = loadAIConfig();
+      // Reset agent singletons so next access picks up new config
+      resetAgentSingletons();
       res.json({
         status: 'ok',
         message: 'AI configuration saved. Changes take effect on next analysis run.',

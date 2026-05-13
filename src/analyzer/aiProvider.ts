@@ -7,7 +7,7 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ai-provider');
 
-interface AIConfig {
+export interface AIConfig {
   apiKey?: string;
   authToken?: string;
   baseUrl?: string;
@@ -122,6 +122,7 @@ export class AIProvider {
   private retryDelayMs: number;
   private envConfig: AIConfig;
   private useSDK: boolean;
+  private isolated: boolean;
 
   // Static configuration from external modules (e.g., configuration management, SettingsView)
   static _externalConfig: AIConfig | null = null;
@@ -136,9 +137,15 @@ export class AIProvider {
     AIProvider._externalConfig = config;
   }
 
-  constructor(config?: { model?: string; maxRetries?: number; retryDelayMs?: number }) {
-    // Load initial configuration
-    this.envConfig = loadEnvConfig();
+  /**
+   * @param agentConfig - When provided, this AIProvider is isolated: it uses only these credentials
+   *                      and ignores global env/config. When omitted, falls back to the standard
+   *                      loadEnvConfig() priority chain.
+   */
+  constructor(config?: { model?: string; maxRetries?: number; retryDelayMs?: number; agentConfig?: AIConfig }) {
+    // Determine execution mode early: isolated agents use their own config directly
+    this.isolated = !!config?.agentConfig;
+    this.envConfig = this.isolated ? { ...config!.agentConfig! } : loadEnvConfig();
 
     // Model priority: explicit constructor config > env config > default
     this.model = config?.model || this.envConfig.model || 'claude-sonnet-4-6';
@@ -155,7 +162,7 @@ export class AIProvider {
     const hasKey = !!this.envConfig.apiKey;
     const hasToken = !!this.envConfig.authToken;
     const hasBase = !!this.envConfig.baseUrl;
-    logger.info(`[AIProvider] Mode: ${this.useSDK ? 'SDK' : 'CLI'}, model: ${this.model}, apiKey=${hasKey}, authToken=${hasToken}, baseUrl=${hasBase}`);
+    logger.info(`[AIProvider] Mode: ${this.useSDK ? 'SDK' : 'CLI'}, model: ${this.model}, apiKey=${hasKey}, authToken=${hasToken}, baseUrl=${hasBase}${this.isolated ? ' (isolated agent)' : ''}`);
   }
 
   /**
@@ -166,11 +173,14 @@ export class AIProvider {
     let lastError: Error | null = null;
 
     // Reload configuration on each call to support dynamic updates (e.g., via PUT /api/config)
-    this.envConfig = loadEnvConfig();
-    this.useSDK = !!(this.envConfig.apiKey || this.envConfig.authToken);
-    // Update model from latest config if not overridden by constructor argument
-    if (!this.model || this.model === 'claude-sonnet-4-6') {
-      this.model = this.envConfig.model || 'claude-sonnet-4-6';
+    // Skip reload for isolated agents — they use their own fixed credentials.
+    if (!this.isolated) {
+      this.envConfig = loadEnvConfig();
+      this.useSDK = !!(this.envConfig.apiKey || this.envConfig.authToken);
+      // Update model from latest config if not overridden by constructor argument
+      if (!this.model || this.model === 'claude-sonnet-4-6') {
+        this.model = this.envConfig.model || 'claude-sonnet-4-6';
+      }
     }
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {

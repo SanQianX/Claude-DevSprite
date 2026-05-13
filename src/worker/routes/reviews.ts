@@ -14,6 +14,7 @@ import { getDatabase } from '../db';
 import { CodeReviewer } from '../../analyzer/codeReviewer';
 import { DesignScanner } from '../../analyzer/designScanner';
 import { DesignFixer } from '../../analyzer/designFixer';
+import type { AIConfig } from '../../analyzer/aiProvider';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('reviews');
@@ -35,6 +36,22 @@ let reviewer: CodeReviewer | null = null;
 let scanner: DesignScanner | null = null;
 let fixer: DesignFixer | null = null;
 
+/**
+ * Build an isolated AIConfig from per-agent settings in config.json.
+ * Returns undefined when no per-agent apiKey or baseUrl is configured,
+ * so the agent falls back to the shared/global config.
+ */
+function buildAgentConfig(agentKey: 'scanner' | 'fixer'): AIConfig | undefined {
+  const override = loadConfigOverride();
+  const agent = override.ai?.[agentKey];
+  if (!agent?.apiKey && !agent?.baseUrl) return undefined;
+  return {
+    apiKey: agent.apiKey,
+    model: agent.model,
+    baseUrl: agent.baseUrl,
+  };
+}
+
 function getReviewer(): CodeReviewer {
   if (!reviewer) {
     reviewer = new CodeReviewer();
@@ -46,7 +63,8 @@ function getScanner(): DesignScanner {
   if (!scanner) {
     const override = loadConfigOverride();
     const scannerModel = override.ai?.scannerModel || override.ai?.model;
-    scanner = new DesignScanner({ model: scannerModel });
+    const agentConfig = buildAgentConfig('scanner');
+    scanner = new DesignScanner({ model: scannerModel, agentConfig });
   }
   return scanner;
 }
@@ -55,9 +73,20 @@ function getFixer(): DesignFixer {
   if (!fixer) {
     const override = loadConfigOverride();
     const fixerModel = override.ai?.fixerModel || override.ai?.model;
-    fixer = new DesignFixer({ model: fixerModel });
+    const agentConfig = buildAgentConfig('fixer');
+    fixer = new DesignFixer({ model: fixerModel, agentConfig });
   }
   return fixer;
+}
+
+/**
+ * Reset singletons so the next access picks up fresh config.json values.
+ * Call this after saving AI config.
+ */
+export function resetAgentSingletons(): void {
+  reviewer = null;
+  scanner = null;
+  fixer = null;
 }
 
 export function registerScannerConfigRoutes(app: Express): void {

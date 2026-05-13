@@ -45,8 +45,16 @@ export interface SystemConfig {
     maxRetries: number
     scannerModel: string
     fixerModel: string
+    scanner?: { model?: string; apiKey?: string; maskedApiKey?: string; baseUrl?: string }
+    fixer?: { model?: string; apiKey?: string; maskedApiKey?: string; baseUrl?: string }
   }
   dbPath?: string
+}
+
+export interface AgentPayload {
+  model?: string
+  apiKey?: string
+  baseUrl?: string
 }
 
 export interface AIConfigPayload {
@@ -56,6 +64,8 @@ export interface AIConfigPayload {
   maxRetries?: number
   scannerModel?: string
   fixerModel?: string
+  scanner?: AgentPayload
+  fixer?: AgentPayload
 }
 
 export interface AITestResult {

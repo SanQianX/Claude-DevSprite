@@ -6,7 +6,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { AIProvider } from './aiProvider';
+import { AIProvider, type AIConfig } from './aiProvider';
 import { getDatabase } from '../worker/db';
 import { createLogger } from '../utils/logger';
 import { KnowledgeBaseManager } from '../knowledge';
@@ -99,8 +99,8 @@ export class DesignScanner {
   private isScanning = false;
   private enabled = true;
 
-  constructor(options?: { model?: string; scanIntervalMs?: number }) {
-    this.aiProvider = new AIProvider({ model: options?.model });
+  constructor(options?: { model?: string; scanIntervalMs?: number; agentConfig?: AIConfig }) {
+    this.aiProvider = new AIProvider({ model: options?.model, agentConfig: options?.agentConfig });
     this.scanIntervalMs = options?.scanIntervalMs ?? 10 * 60 * 1000; // 10 minutes default
   }
 

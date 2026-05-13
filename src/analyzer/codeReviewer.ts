@@ -21,7 +21,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import simpleGit from 'simple-git';
-import { AIProvider } from './aiProvider';
+import { AIProvider, type AIConfig } from './aiProvider';
 import { DiffCollector } from './diffCollector';
 import { getDatabase } from '../worker/db';
 import { createLogger } from '../utils/logger';
@@ -117,8 +117,8 @@ export class CodeReviewer {
   private scanTimer: ReturnType<typeof setInterval> | null = null;
   private isScanning = false;
 
-  constructor(options?: { model?: string; scanIntervalMs?: number }) {
-    this.aiProvider = new AIProvider({ model: options?.model });
+  constructor(options?: { model?: string; scanIntervalMs?: number; agentConfig?: AIConfig }) {
+    this.aiProvider = new AIProvider({ model: options?.model, agentConfig: options?.agentConfig });
     this.scanIntervalMs = options?.scanIntervalMs ?? 5 * 60 * 1000; // 5 minutes default
   }
 

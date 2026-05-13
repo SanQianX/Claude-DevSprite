@@ -52,23 +52,63 @@
 
         <div class="section">
           <h3 class="section-title">Scanner Agent</h3>
-          <p class="section-desc">AI model used for design consistency analysis (finds issues only).</p>
+          <p class="section-desc">AI model used for design consistency analysis (finds issues only). Leave fields empty to inherit shared settings.</p>
 
           <div class="form-group">
             <label class="form-label">Scanner Model</label>
             <input v-model="aiConfig.scannerModel" class="form-input" placeholder="e.g. claude-sonnet-4-6" />
             <span class="form-hint">Leave empty to use the default model above</span>
           </div>
+          <div class="form-group">
+            <label class="form-label">Scanner API Key</label>
+            <div class="input-with-btn">
+              <input
+                v-model="aiConfig.scannerApiKey"
+                class="form-input"
+                :type="showScannerApiKey ? 'text' : 'password'"
+                placeholder="Leave empty to inherit shared key"
+              />
+              <button class="btn-sm" @click="showScannerApiKey = !showScannerApiKey">
+                {{ showScannerApiKey ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+            <span class="form-hint">Per-agent key overrides the shared API key for this agent</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Scanner Base URL</label>
+            <input v-model="aiConfig.scannerBaseUrl" class="form-input" placeholder="Leave empty to inherit shared base URL" />
+            <span class="form-hint">Custom endpoint for this agent (e.g. a different provider)</span>
+          </div>
         </div>
 
         <div class="section">
           <h3 class="section-title">Fixer Agent</h3>
-          <p class="section-desc">AI model used for code fix generation (fixes issues + git commit).</p>
+          <p class="section-desc">AI model used for code fix generation (fixes issues + git commit). Leave fields empty to inherit shared settings.</p>
 
           <div class="form-group">
             <label class="form-label">Fixer Model</label>
             <input v-model="aiConfig.fixerModel" class="form-input" placeholder="e.g. claude-haiku-4-5-20251001" />
             <span class="form-hint">Leave empty to use the default model above</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fixer API Key</label>
+            <div class="input-with-btn">
+              <input
+                v-model="aiConfig.fixerApiKey"
+                class="form-input"
+                :type="showFixerApiKey ? 'text' : 'password'"
+                placeholder="Leave empty to inherit shared key"
+              />
+              <button class="btn-sm" @click="showFixerApiKey = !showFixerApiKey">
+                {{ showFixerApiKey ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+            <span class="form-hint">Per-agent key overrides the shared API key for this agent</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fixer Base URL</label>
+            <input v-model="aiConfig.fixerBaseUrl" class="form-input" placeholder="Leave empty to inherit shared base URL" />
+            <span class="form-hint">Custom endpoint for this agent (e.g. a different provider)</span>
           </div>
         </div>
 
@@ -284,8 +324,14 @@ const aiConfig = reactive({
   maxRetries: 3,
   scannerModel: '',
   fixerModel: '',
+  scannerApiKey: '',
+  scannerBaseUrl: '',
+  fixerApiKey: '',
+  fixerBaseUrl: '',
 })
 const showApiKey = ref(false)
+const showScannerApiKey = ref(false)
+const showFixerApiKey = ref(false)
 const testing = ref(false)
 const aiTestResult = ref<{ success: boolean; message: string } | null>(null)
 
@@ -334,6 +380,10 @@ async function loadConfig() {
     aiConfig.maxRetries = cfg.ai?.maxRetries || cfg.analysis?.maxRetries || 3
     aiConfig.scannerModel = cfg.ai?.scannerModel || ''
     aiConfig.fixerModel = cfg.ai?.fixerModel || ''
+    aiConfig.scannerApiKey = cfg.ai?.scanner?.maskedApiKey || ''
+    aiConfig.scannerBaseUrl = cfg.ai?.scanner?.baseUrl || ''
+    aiConfig.fixerApiKey = cfg.ai?.fixer?.maskedApiKey || ''
+    aiConfig.fixerBaseUrl = cfg.ai?.fixer?.baseUrl || ''
   } catch (e: any) {
     console.error('Failed to load config:', e)
   }
@@ -398,6 +448,20 @@ async function saveAiConfig() {
     // If apiKey still contains "..." (masked), it means user didn't edit it.
     // Send empty so backend keeps the existing saved key.
     const apiKeyToSend = aiConfig.apiKey.includes('...') ? '' : aiConfig.apiKey
+    const scannerApiKeyToSend = aiConfig.scannerApiKey.includes('...') ? '' : aiConfig.scannerApiKey
+    const fixerApiKeyToSend = aiConfig.fixerApiKey.includes('...') ? '' : aiConfig.fixerApiKey
+
+    // Build per-agent payloads (only send when user typed something new)
+    const scannerPayload = (scannerApiKeyToSend || aiConfig.scannerBaseUrl || aiConfig.scannerModel) ? {
+      model: aiConfig.scannerModel || undefined,
+      apiKey: scannerApiKeyToSend || undefined,
+      baseUrl: aiConfig.scannerBaseUrl || undefined,
+    } : undefined
+    const fixerPayload = (fixerApiKeyToSend || aiConfig.fixerBaseUrl || aiConfig.fixerModel) ? {
+      model: aiConfig.fixerModel || undefined,
+      apiKey: fixerApiKeyToSend || undefined,
+      baseUrl: aiConfig.fixerBaseUrl || undefined,
+    } : undefined
 
     await configApi.saveAI({
       model: aiConfig.model,
@@ -406,6 +470,8 @@ async function saveAiConfig() {
       maxRetries: aiConfig.maxRetries,
       scannerModel: aiConfig.scannerModel || undefined,
       fixerModel: aiConfig.fixerModel || undefined,
+      scanner: scannerPayload,
+      fixer: fixerPayload,
     })
     // Reload to reflect saved state (shows masked key again)
     await loadConfig()

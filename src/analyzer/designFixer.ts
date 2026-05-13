@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import simpleGit from 'simple-git';
 import { CodeReviewer } from './codeReviewer';
+import type { AIConfig } from './aiProvider';
 import { getDatabase } from '../worker/db';
 import { createLogger } from '../utils/logger';
 
@@ -26,8 +27,8 @@ export class DesignFixer {
   private isFixing = false;
   private enabled = false;
 
-  constructor(options?: { model?: string; fixIntervalMs?: number }) {
-    this.codeReviewer = new CodeReviewer({ model: options?.model });
+  constructor(options?: { model?: string; fixIntervalMs?: number; agentConfig?: AIConfig }) {
+    this.codeReviewer = new CodeReviewer({ model: options?.model, agentConfig: options?.agentConfig });
     this.fixIntervalMs = options?.fixIntervalMs ?? 5 * 60 * 1000; // 5 minutes default
   }
 
