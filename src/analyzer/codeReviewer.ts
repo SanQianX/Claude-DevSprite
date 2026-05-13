@@ -399,8 +399,10 @@ export class CodeReviewer {
  * 
  * **路由说明 (对应审查意见):**
  * - **POST /reviews/:id/fix**: 已实现。调用 `CodeReviewer.generateFix` 方法，处理修复请求。
- * - **PUT /reviews/:id/approve** 和 **PUT /reviews/:id/ignore**: 未实现。根据设计文档，这些是死代码，前端从未调用。
- *   因此，本路由器不提供这两个端点。如果未来需要，可以按需添加。
+ * - **PUT /reviews/:id/approve** 和 **PUT /reviews/:id/ignore**: 根据设计文档，这些是死代码端点。
+ *   - 设计文档 (FUNCTIONAL-LOGIC-ANALYSIS.md) 的 '死代码与路由冲突' 部分明确指出，这些端点在前端从未被调用。
+ *   - 为避免混淆和不一致，本路由器**不包含**这两个端点。它们已被确认为遗留代码，应从代码库中移除。
+ *   - 如果未来需要类似功能，应根据实际需求重新设计并添加新端点。
  * 
  * **使用方式:**
  * 在主应用（如 src/worker/app.ts）中导入并挂载此路由器：
@@ -466,10 +468,11 @@ export function createReviewsRouter(reviewer: CodeReviewer): Router {
     }
   });
 
-  // TODO: 如果未来需要，可以添加其他端点，如：
-  // router.put('/reviews/:id/approve', async (req, res) => { ... });
-  // router.put('/reviews/:id/ignore', async (req, res) => { ... });
-  // 但根据审查意见，它们目前是死代码，因此不予实现。
+  // 注意：根据设计文档 (FUNCTIONAL-LOGIC-ANALYSIS.md) 的“死代码与路由冲突”清单，
+  // 以下端点被明确标识为死代码（前端从未调用），因此不予实现：
+  // - PUT /reviews/:id/approve
+  // - PUT /reviews/:id/ignore
+  // 如需类似功能，应重新评估需求并设计新端点。
 
   return router;
 }
