@@ -615,3 +615,8 @@ testBugFix().catch(console.error);
 ### 结论
 ✅ 所有测试通过，修复有效
 ```
+
+
+## Design Checker Module
+
+This module (DesignChecker) performs background scanning to ensure design-code consistency. Refer to DESIGN-CHECKER-MODULE.md for details.

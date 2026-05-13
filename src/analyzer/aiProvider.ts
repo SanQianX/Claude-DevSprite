@@ -25,34 +25,19 @@ interface AIConfig {
 function loadEnvConfig(): AIConfig {
   const config: AIConfig = {};
 
-  // Load from worker-env.json (written by daemon.js on start)
-  const envFile = path.join(__dirname, '../../dev-scripts/worker-env.json');
-  if (fs.existsSync(envFile)) {
+  // Load from ~/.claude-dev-sprite/config.json (primary config as per design document)
+  const configJsonPath = path.join(os.homedir(), '.claude-dev-sprite', 'config.json');
+  if (fs.existsSync(configJsonPath)) {
     try {
-      const data = JSON.parse(fs.readFileSync(envFile, 'utf-8'));
-      if (data.ANTHROPIC_API_KEY) config.apiKey = data.ANTHROPIC_API_KEY;
-      if (data.ANTHROPIC_AUTH_TOKEN) config.authToken = data.ANTHROPIC_AUTH_TOKEN;
-      if (data.ANTHROPIC_BASE_URL) config.baseUrl = data.ANTHROPIC_BASE_URL;
-      if (data.ANTHROPIC_MODEL) config.model = data.ANTHROPIC_MODEL;
+      const data = JSON.parse(fs.readFileSync(configJsonPath, 'utf-8'));
+      // Assume AI provider configuration is stored under 'aiProvider' key in config.json
+      const aiConfig = data.aiProvider || {};
+      if (aiConfig.apiKey) config.apiKey = aiConfig.apiKey;
+      if (aiConfig.authToken) config.authToken = aiConfig.authToken;
+      if (aiConfig.baseUrl) config.baseUrl = aiConfig.baseUrl;
+      if (aiConfig.model) config.model = aiConfig.model;
     } catch (error) {
-      logger.warn(`[AIProvider] Failed to read worker-env.json: ${error}`);
-    }
-  }
-
-  // Load API key from ~/.claude-dev-sprite/.env (overrides env file)
-  const envPath = path.join(os.homedir(), '.claude-dev-sprite', '.env');
-  if (fs.existsSync(envPath)) {
-    try {
-      const content = fs.readFileSync(envPath, 'utf-8');
-      for (const line of content.split('\n')) {
-        const match = line.match(/^ANTHROPIC_API_KEY=(.+)$/);
-        if (match) {
-          config.apiKey = match[1].trim();
-          break;
-        }
-      }
-    } catch (error) {
-      logger.warn(`[AIProvider] Failed to read .env file: ${error}`);
+      logger.warn(`[AIProvider] Failed to read config.json: ${error}`);
     }
   }
 

@@ -1,5 +1,5 @@
 @echo off
-set "ANTHROPIC_AUTH_TOKEN=tp-co7hqo7902z08bm9wetz3aqobllj8johfaw1o862lba8npq0"
+set "ANTHROPIC_AUTH_TOKEN=tp-czetsxqmkb5maksmdw18pavhqr6u0xe8i14p8mk0gc0vb9kg"
 set "ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic"
 set "ANTHROPIC_MODEL=mimo-v2.5"
 set "ANTHROPIC_DEFAULT_SONNET_MODEL=mimo-v2.5"

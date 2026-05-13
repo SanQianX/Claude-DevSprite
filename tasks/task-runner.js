@@ -12,31 +12,40 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const lockfile = require('proper-lockfile');
 
 const STATE_FILE = path.join(__dirname, 'STATE.json');
 const BUGFIX_DIR = path.join(__dirname, 'bugfix');
 const TIMEOUT_MS = 10 * 60 * 1000; // 10 分钟
 
-// 读取状态
-function readState() {
+// 读取状态（添加文件锁）
+async function readState() {
+  let release;
   try {
+    release = await lockfile.lock(STATE_FILE, { realpath: false, retries: 3 });
     const data = fs.readFileSync(STATE_FILE, 'utf8');
     return JSON.parse(data);
   } catch (error) {
     console.error('Failed to read state:', error.message);
     return null;
+  } finally {
+    if (release) await release();
   }
 }
 
-// 写入状态
-function writeState(state) {
+// 写入状态（添加文件锁）
+async function writeState(state) {
+  let release;
   try {
+    release = await lockfile.lock(STATE_FILE, { realpath: false, retries: 3 });
     state.lastUpdate = new Date().toISOString();
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
     return true;
   } catch (error) {
     console.error('Failed to write state:', error.message);
     return false;
+  } finally {
+    if (release) await release();
   }
 }
 
@@ -56,10 +65,10 @@ function gitCommand(cmd) {
       encoding: 'utf8',
       timeout: 30000
     });
-    return result.trim();
+    return { success: true, output: result.trim(), error: null };
   } catch (error) {
     console.error(`Git command failed: ${cmd}`, error.message);
-    return null;
+    return { success: false, output: null, error: error.message };
   }
 }
 
@@ -76,8 +85,12 @@ function commitToGit(taskId, taskName) {
   execSync('git add tasks/', { cwd: path.join(__dirname, '..') });
 
   // 检查是否有变更
-  const status = gitCommand('git status --porcelain tasks/');
-  if (!status) {
+  const statusResult = gitCommand('git status --porcelain tasks/');
+  if (!statusResult.success) {
+    console.error('Failed to get git status');
+    return false;
+  }
+  if (!statusResult.output) {
     console.log('No changes to commit');
     return false;
   }
@@ -155,7 +168,7 @@ ${task.files.map(f => `- ${f}`).join('\n')}
 async function main() {
   console.log(`[${new Date().toISOString()}] Task Runner started`);
 
-  const state = readState();
+  const state = await readState();
   if (!state) {
     console.error('Cannot read state, exiting');
     process.exit(1);
@@ -176,7 +189,7 @@ async function main() {
   if (!nextTask) {
     console.log('All tasks completed!');
     state.status = 'completed';
-    writeState(state);
+    await writeState(state);
     process.exit(0);
   }
 
@@ -185,7 +198,7 @@ async function main() {
   // 更新状态为进行中
   state.currentTask = nextTask.id;
   state.status = 'in_progress';
-  writeState(state);
+  await writeState(state);
 
   // 创建 bugfix 文件夹
   const folderPath = createBugfixFolder(nextTask.id);
@@ -193,16 +206,20 @@ async function main() {
   // 生成任务报告
   generateTaskReport(nextTask, folderPath);
 
-  // 更新状态
+  // 提交到 git
+  console.log('Committing changes...');
+  const commitSuccess = commitToGit(nextTask.id, nextTask.name);
+  if (!commitSuccess) {
+    console.error('Commit failed, aborting push');
+    process.exit(1);
+  }
+
+  // 如果提交成功，更新状态
   state.completedTasks.push(nextTask.id);
   state.statistics.completed++;
   state.statistics.pending--;
   state.status = 'idle';
-  writeState(state);
-
-  // 提交到 git
-  console.log('Committing changes...');
-  commitToGit(nextTask.id, nextTask.name);
+  await writeState(state);
 
   // 推送到远程
   console.log('Pushing to remote...');

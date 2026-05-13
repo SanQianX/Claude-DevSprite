@@ -270,7 +270,8 @@ export class CodeReviewer {
   async generateFix(
     projectPath: string,
     filePath: string,
-    finding: { title: string; description: string; suggestion?: string }
+    finding: { title: string; description: string; suggestion?: string },
+    reviewId?: string
   ): Promise<{ fixedContent: string; explanation: string } | null> {
     const fullPath = path.join(projectPath, filePath);
     if (!fs.existsSync(fullPath)) return null;
@@ -290,6 +291,21 @@ export class CodeReviewer {
     try {
       const parsed = JSON.parse(response.content);
       if (typeof parsed.fixedContent === 'string' && parsed.fixedContent.length > 0 && typeof parsed.explanation === 'string') {
+        // Write fixed content to file
+        fs.writeFileSync(fullPath, parsed.fixedContent, 'utf-8');
+        logger.info(`[CodeReviewer] Fixed file ${filePath}`);
+
+        // Update database status if reviewId provided
+        if (reviewId) {
+          try {
+            const db = await getDatabase();
+            db.updateReview(reviewId, { status: 'fixed' });
+            logger.info(`[CodeReviewer] Updated review ${reviewId} status to 'fixed'`);
+          } catch (dbError: any) {
+            logger.error(`[CodeReviewer] Failed to update review status: ${dbError.message}`);
+          }
+        }
+
         return parsed;
       }
     } catch {

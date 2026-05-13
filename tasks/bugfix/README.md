@@ -7,6 +7,7 @@
 | 文件夹 | 问题 | 组件 | 日期 |
 |--------|------|------|------|
 | [tokens-mock-data/](./tokens-mock-data/) | Tokens 栏显示 Mock 数据 | TokensBar.vue | 2026-05-12 |
+| [autofix-no-actual-fix/](./autofix-no-actual-fix/) | 自动修复 0 个实际修复文件 | designChecker.ts | 2026-05-13 |
 
 ## 文件夹命名规范
 

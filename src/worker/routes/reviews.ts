@@ -2,8 +2,6 @@
  * Reviews API Routes
  * GET    /api/projects/:name/reviews       - List reviews (with optional status filter)
  * POST   /api/projects/:name/reviews/scan  - Trigger manual scan
- * PUT    /api/reviews/:id/approve          - Approve a review finding
- * PUT    /api/reviews/:id/ignore           - Ignore a review finding
  * POST   /api/reviews/:id/fix              - Generate AI fix for a finding
  */
 
@@ -98,10 +96,10 @@ export function registerReviewRoutes(app: Express): void {
   }));
 
   /**
-   * PUT /api/reviews/:id/approve
-   * Approve a review finding (mark as approved)
+   * PUT /api/projects/:name/reviews/:id
+   * Update a review (approve, ignore, etc.)
    */
-  app.put('/api/reviews/:id/approve', asyncHandler(async (req: Request, res: Response) => {
+  app.put('/api/projects/:name/reviews/:id', asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) throw createError('Invalid review ID', 400);
 
@@ -109,24 +107,16 @@ export function registerReviewRoutes(app: Express): void {
     const review = db.getReview(id);
     if (!review) throw createError('Review not found', 404);
 
-    db.updateReview(id, { status: 'approved', resolved_at: new Date().toISOString() });
-    res.json({ message: '已批准', review: db.getReview(id) });
-  }));
+    const { status, resolved_at } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (status) updates.status = status;
+    if (resolved_at) updates.resolved_at = resolved_at;
+    else if (status === 'approved' || status === 'ignored' || status === 'fixed' || status === 'confirmed') {
+      updates.resolved_at = new Date().toISOString();
+    }
 
-  /**
-   * PUT /api/reviews/:id/ignore
-   * Ignore a review finding (mark as ignored)
-   */
-  app.put('/api/reviews/:id/ignore', asyncHandler(async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id, 10);
-    if (isNaN(id)) throw createError('Invalid review ID', 400);
-
-    const db = await getDatabase();
-    const review = db.getReview(id);
-    if (!review) throw createError('Review not found', 404);
-
-    db.updateReview(id, { status: 'ignored', resolved_at: new Date().toISOString() });
-    res.json({ message: '已忽略', review: db.getReview(id) });
+    db.updateReview(id, updates as any);
+    res.json({ message: '已更新', review: db.getReview(id) });
   }));
 
   /**

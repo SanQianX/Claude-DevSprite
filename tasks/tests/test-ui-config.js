@@ -17,7 +17,7 @@ const BASE_URL = 'http://127.0.0.1:38888';
     // Step 1: 打开设置页面
     console.log('Step 1: 打开设置页面');
     await page.goto(`${BASE_URL}/settings`, { timeout: 15000 });
-    await page.waitForTimeout(3000);
+    await page.waitForSelector('.settings-page', { state: 'visible', timeout: 10000 });
 
     const settingsPage = await page.locator('.settings-page').count();
     console.log('设置页面存在:', settingsPage > 0);
@@ -31,7 +31,7 @@ const BASE_URL = 'http://127.0.0.1:38888';
     const aiTab = page.locator('.tab-btn').filter({ hasText: 'AI Model' });
     if (await aiTab.count() > 0) {
       await aiTab.click();
-      await page.waitForTimeout(500);
+      await page.waitForSelector('.tab-btn.active', { state: 'visible', timeout: 5000 });
       const activeTab = await page.locator('.tab-btn.active').textContent();
       console.log('当前 Tab:', activeTab.trim());
     }
@@ -69,7 +69,7 @@ const BASE_URL = 'http://127.0.0.1:38888';
     const systemTab = page.locator('.tab-btn').filter({ hasText: 'System' });
     if (await systemTab.count() > 0) {
       await systemTab.click();
-      await page.waitForTimeout(500);
+      await page.waitForSelector('.tab-btn.active', { state: 'visible', timeout: 5000 });
 
       const selects = await page.locator('.tab-panel select.form-input').count();
       console.log('System 配置下拉框:', selects);
@@ -87,7 +87,7 @@ const BASE_URL = 'http://127.0.0.1:38888';
     const teamsTab = page.locator('.tab-btn').filter({ hasText: 'Agent Teams' });
     if (await teamsTab.count() > 0) {
       await teamsTab.click();
-      await page.waitForTimeout(1000);
+      await page.waitForSelector('.tab-btn.active', { state: 'visible', timeout: 5000 });
 
       const teamCards = await page.locator('.team-card').count();
       console.log('团队配置卡片:', teamCards);
@@ -103,7 +103,7 @@ const BASE_URL = 'http://127.0.0.1:38888';
     const skillsTab = page.locator('.tab-btn').filter({ hasText: 'Skills' });
     if (await skillsTab.count() > 0) {
       await skillsTab.click();
-      await page.waitForTimeout(1000);
+      await page.waitForSelector('.tab-btn.active', { state: 'visible', timeout: 5000 });
 
       const skillCards = await page.locator('.skill-inventory-card').count();
       console.log('技能卡片:', skillCards);
@@ -111,7 +111,8 @@ const BASE_URL = 'http://127.0.0.1:38888';
 
     // Step 9: 检查控制台错误
     console.log('\nStep 9: 控制台错误');
-    const coreErrors = errors.filter(e => !e.includes('WebSocket') && !e.includes('Failed to fetch'));
+    const IGNORED_ERROR_PREFIXES = ['WebSocket connection failed', 'Failed to fetch'];
+    const coreErrors = errors.filter(e => !IGNORED_ERROR_PREFIXES.some(prefix => e.startsWith(prefix)));
     console.log('核心错误:', coreErrors.length);
     coreErrors.slice(0, 3).forEach(e => console.log('  -', e.substring(0, 120)));
 

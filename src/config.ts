@@ -131,15 +131,21 @@ const getDefaultConfig = (): Config => ({
 // Default configuration
 export const config: Config = getDefaultConfig();
 
-// Database path (kept separate as it's for the DevSprite system, not per-project)
-export const dbPath: string = path.join(os.homedir(), '.claude', 'claude-dev-sprite', 'data', 'dev-sprite.db');
+// Base directory for DevSprite system data
+const baseDataDir: string = path.join(os.homedir(), '.claude', 'claude-dev-sprite', 'data');
+
+// Database path for structured data (projects, tasks, reviews, etc.)
+export const dbPath: string = path.join(baseDataDir, 'dev-sprite.db');
+
+// Configuration file path for system-level settings (JSON)
+// As per design document: ~/.claude-dev-sprite/config.json
+export const configFile: string = path.join(os.homedir(), '.claude-dev-sprite', 'config.json');
 
 // Ensure data directory exists
 try {
   const fs = require('fs');
-  const dbDir = path.dirname(dbPath);
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
+  if (!fs.existsSync(baseDataDir)) {
+    fs.mkdirSync(baseDataDir, { recursive: true });
   }
 } catch (error) {
   // Ignore errors during initialization

@@ -1,0 +1,48 @@
+=== DevChat Workspace 会话持久化测试 [1778523700440] ===
+
+Step 1: 打开 Workspace Chat 面板
+Chat panel: true
+Chat input: true
+Messages list: true
+
+Step 2: 检查当前消息数量
+当前消息数量: 22
+
+Step 3: 发送测试消息
+已输入: 持久化测试-1778523700440
+已点击发送按钮
+发送后消息数量: 25
+
+Step 4: 记录当前状态
+切换前消息数量: 25
+
+Step 5: 切换到 Dashboard tab
+
+Step 6: 切换回 Workspace Chat
+
+Step 7: 检查消息保留情况
+切换后消息数量: 26
+✅ 消息保留正常 (Tab 切换)
+
+Step 8: 刷新页面
+刷新后消息数量: 2
+✅ 刷新后消息保留
+
+Step 9: 检查输入框状态
+输入框可用: true
+
+Step 10: 控制台错误检查
+其他错误: 12 个
+  1. Failed to load resource: the server responded with a status of 404 (Not Found)
+  2. Failed to load resource: the server responded with a status of 404 (Not Found)
+  3. Failed to load resource: the server responded with a status of 404 (Not Found)
+  4. Failed to load resource: the server responded with a status of 404 (Not Found)
+  5. Failed to load resource: the server responded with a status of 404 (Not Found)
+
+截图已保存: test-persistence-1778523700440.png
+
+=== 测试总结 ===
+测试 ID: 1778523700440
+消息持久化 (Tab 切换): ✅ 通过 (25 -> 26)
+消息持久化 (页面刷新): ✅ 通过 (2 msgs)
+✅ 正常

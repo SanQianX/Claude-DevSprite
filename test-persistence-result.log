@@ -1,0 +1,43 @@
+=== DevChat Workspace 会话持久化测试 ===
+
+Step 1: 打开 Workspace Chat 面板
+Chat 面板存在: true
+聊天输入框存在: true
+消息列表存在: true
+项目记忆面板存在: true
+
+Step 2: 检查当前消息数量
+当前消息数量: 5
+
+Step 3: 发送测试消息
+已输入: 持久化测试-1778523700440
+已点击发送按钮
+发送后消息数量: 6
+
+Step 4: 记录当前状态
+切换前消息数量: 6
+
+Step 5: 切换到 Dashboard tab
+Dashboard 页面上 Chat 面板不存在: true
+
+Step 6: 切换回 Workspace Chat
+
+Step 7: 检查消息保留情况
+切换后消息数量: 7
+✅ 消息保留正常 (Tab 切换)
+
+Step 8: 刷新页面
+刷新后消息数量: 8
+✅ 刷新后消息保留
+
+Step 9: 检查输入框状态
+输入框可用: true
+
+Step 10: 控制台错误检查
+✅ 无控制台错误
+
+截图已保存: test-devchat-persistence.png
+
+=== 测试总结 ===
+消息持久化 (Tab 切换): ✅ 通过
+消息持久化 (页面刷新): ✅ 通过

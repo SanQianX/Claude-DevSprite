@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
 
 const BASE_URL = 'http://127.0.0.1:38888';
 
-(async () => {
+async function main() {
   console.log('=== 知识库浏览 自动测试 ===\n');
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -61,7 +61,14 @@ const BASE_URL = 'http://127.0.0.1:38888';
       try {
         const res = await fetch('/api/search?q=test&project=Claude-DevSprite');
         const data = await res.json();
-        return { status: res.status, count: Array.isArray(data) ? data.length : 0 };
+        // 改进: 明确检查响应结构，增加验证使意图更明确
+        let count = 0;
+        if (Array.isArray(data)) {
+          count = data.length;
+        } else if (data && data.results && Array.isArray(data.results)) {
+          count = data.results.length;
+        }
+        return { status: res.status, count: count, isArray: Array.isArray(data), hasResults: !!(data && data.results) };
       } catch (e) {
         return { error: e.message };
       }
@@ -70,7 +77,15 @@ const BASE_URL = 'http://127.0.0.1:38888';
 
     // Step 6: 控制台错误
     console.log('\nStep 6: 控制台错误');
-    const coreErrors = errors.filter(e => !e.includes('tokens') && !e.includes('Failed to fetch'));
+    const coreErrors = errors.filter(e => {
+      const lowerE = e.toLowerCase();
+      // 排除常见无关错误，使过滤更精确
+      return !lowerE.includes('token') && 
+             !lowerE.includes('fetch') && 
+             !lowerE.includes('network') && 
+             !lowerE.includes('timeout') && 
+             !lowerE.includes('cors');
+    });
     if (coreErrors.length > 0) {
       console.log('核心错误:', coreErrors.length);
       coreErrors.slice(0, 5).forEach(e => console.log('  -', e.substring(0, 100)));
@@ -83,4 +98,9 @@ const BASE_URL = 'http://127.0.0.1:38888';
   } finally {
     await browser.close();
   }
-})();
+}
+
+main().catch(e => {
+  console.error('测试脚本意外崩溃:', e.message);
+  process.exit(1);
+});

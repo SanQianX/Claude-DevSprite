@@ -206,3 +206,8 @@
 | **总计** | **44** | **490** | **11-14 小时** |
 
 *注: 不含已完成的 4 个组件*
+
+
+## Design Checker Module
+
+This module (DesignChecker) performs background scanning to ensure design-code consistency. Refer to DESIGN-CHECKER-MODULE.md for details.

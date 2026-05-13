@@ -1,0 +1,25 @@
+=== DevChat Persistence Test ===
+
+1. Launching browser...
+2. Browser launched
+3. New page created
+4. Navigating to Workspace Chat...
+5. Page loaded
+6. UI Check - chat-panel: true, input: true, messages: true
+7. Messages before: 33
+8. Message sent via button
+9. Messages after send: 34
+10. Before nav count: 34
+11. Navigating to Dashboard...
+12. Navigating back to Workspace Chat...
+13. After nav count: 35
+14. Tab switch persistence: PASS
+15. Page refresh...
+16. After refresh count: 37
+17. Page refresh persistence: PASS
+18. Screenshot saved
+
+=== Summary ===
+Tab switch: PASS (34 -> 35)
+Page refresh: PASS (37 msgs)
+Done

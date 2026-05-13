@@ -1,7 +1,3 @@
-/**
- * DevChat Message Flow (P0) + Session Persistence (P0) - UI 测试
- * 测试: 消息输入 -> 发送 -> 消息显示 -> 切换页面 -> 返回 -> 消息保留
- */
 const { chromium } = require('playwright');
 
 const BASE_URL = 'http://127.0.0.1:38888';
@@ -78,6 +74,10 @@ const NAV_OPTS = { timeout: 15000, waitUntil: 'domcontentloaded' };
           const messageCountAfter = await page.locator('.message').count();
           console.log('发送后消息数:', messageCountAfter);
           console.log('消息已添加:', messageCountAfter > messageCount);
+
+          // 增强断言：验证消息内容正确性
+          const messageWithText = await page.locator('.message:has-text("Hello from E2E test")').count();
+          console.log('消息内容验证:', messageWithText > 0);
         } else {
           console.log('发送按钮禁用 - 跳过发送测试');
         }
@@ -118,6 +118,10 @@ const NAV_OPTS = { timeout: 15000, waitUntil: 'domcontentloaded' };
     console.log('切换后消息数:', messagesAfterSwitch);
     console.log('消息保留:', messagesAfterSwitch >= messagesBeforeSwitch);
 
+    // 增强断言：验证消息内容持久化
+    const messageAfterSwitchWithText = await page.locator('.message:has-text("Hello from E2E test")').count();
+    console.log('切换后消息内容验证:', messageAfterSwitchWithText > 0);
+
     // Step 9: 测试页面刷新后消息恢复
     console.log('\nStep 9: 测试页面刷新后消息恢复');
     await page.reload(NAV_OPTS);
@@ -127,12 +131,16 @@ const NAV_OPTS = { timeout: 15000, waitUntil: 'domcontentloaded' };
     console.log('刷新后消息数:', messagesAfterRefresh);
     console.log('刷新后消息保留:', messagesAfterRefresh >= messagesBeforeSwitch);
 
+    // 增强断言：验证刷新后消息内容正确性
+    const messageAfterRefreshWithText = await page.locator('.message:has-text("Hello from E2E test")').count();
+    console.log('刷新后消息内容验证:', messageAfterRefreshWithText > 0);
+
     // Step 10: 检查控制台错误
     console.log('\nStep 10: 控制台错误');
     const coreErrors = errors.filter(e =>
       !e.includes('WebSocket') &&
       !e.includes('Failed to fetch') &&
-      !e.includes('404')
+      !(e.includes('404') && e.includes('favicon'))
     );
     console.log('核心错误:', coreErrors.length);
     coreErrors.slice(0, 3).forEach(e => console.log('  -', e.substring(0, 120)));

@@ -5,7 +5,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import simpleGit from 'simple-git';
 import { AIProvider } from './aiProvider';
+import { CodeReviewer } from './codeReviewer';
 import { getDatabase } from '../worker/db';
 import { createLogger } from '../utils/logger';
 import { KnowledgeBaseManager } from '../knowledge';
@@ -66,6 +68,12 @@ const DESIGN_CHECK_PROMPT = `你是一个功能一致性检查专家。请比较
   ],
   "summary": "总结：检查了X个文件，发现Y个不一致..."
 }
+
+【重要】file 字段要求：
+- file 必须是上面"实际代码"部分中出现的一个源代码文件路径（如 src/analyzer/aiProvider.ts）
+- file 必须指向需要修改的源代码文件，不能是"设计文档"、"知识库"等文档名称
+- 如果问题涉及多个文件，选择最相关的那个
+- 如果问题纯属设计层面、没有对应的代码文件可修改，将 file 设为空字符串 ""
 
 要求：
 - 只报告真实的问题，不要报告不存在的问题
@@ -210,6 +218,22 @@ export class DesignChecker {
     // 6. Parse response
     const result = this.parseResponse(response, sourceFiles.length);
 
+    // 6.5 Validate file paths - ensure they point to real code files
+    const validFilePaths = new Set(sourceFiles.map(f => f.relativePath));
+    for (const finding of result.findings) {
+      if (finding.file && !validFilePaths.has(finding.file)) {
+        // Try to find a matching file from the source files list
+        const inferred = this.inferFilePath(finding.file, finding.title, finding.description, sourceFiles);
+        if (inferred) {
+          logger.info(`[DesignChecker] Inferred file path: "${finding.file}" → "${inferred}"`);
+          finding.file = inferred;
+        } else {
+          logger.warn(`[DesignChecker] Invalid file path "${finding.file}" for finding "${finding.title}", clearing`);
+          finding.file = '';
+        }
+      }
+    }
+
     // 7. Save findings to database
     const db = await getDatabase();
     if (result.findings.length > 0) {
@@ -228,6 +252,48 @@ export class DesignChecker {
         status: 'pending' as const,
       }));
       db.createReviewsBatch(reviews);
+
+      // 7.5 Create tasks for each review to sync with task management module
+      const pendingReviews = db.getPendingReviews(projectId)
+        .filter((r: any) => r.source === 'design-check');
+
+      for (const review of pendingReviews) {
+        try {
+          const task = {
+            project_id: projectId,
+            title: `设计检查任务: ${review.title}`,
+            description: review.description || review.title,
+            status: 'open',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            review_id: review.id, // Link task to review for state synchronization
+          };
+          db.createTask(task);
+        } catch (error: any) {
+          logger.warn(`[DesignChecker] Failed to create task for review ${review.id}: ${error.message}`);
+        }
+      }
+
+      // 8. Auto-fix newly created reviews
+      const newReviewIds = pendingReviews.map((r: any) => r.id)
+        .filter((id: number) => {
+          // Only fix reviews that were just created (in this batch)
+          return result.findings.some((_, idx) => {
+            const review = reviews[idx];
+            return review && db.getReview(id)?.title === review.title;
+          });
+        });
+
+      if (newReviewIds.length > 0) {
+        logger.info(`[DesignChecker] Auto-fixing ${newReviewIds.length} reviews for "${projectName}"`);
+        const fixResult = await this.autoFixReviews(projectPath, projectId, newReviewIds);
+        logger.info(`[DesignChecker] Auto-fix result: ${fixResult.fixed} fixed, ${fixResult.confirmed} confirmed, ${fixResult.failed} failed`);
+
+        // 9. Git commit and push if any files were fixed
+        if (fixResult.fixed > 0) {
+          await this.commitAndPush(projectPath, projectName, fixResult.fixed);
+        }
+      }
     }
 
     logger.info(`[DesignChecker] Project "${projectName}": ${result.findings.length} findings from ${sourceFiles.length} files`);
@@ -384,5 +450,209 @@ export class DesignChecker {
         modelUsed: '',
       };
     }
+  }
+
+  /**
+   * Auto-fix reviews: valid file_path → AI fix, invalid → confirmed
+   */
+  private async autoFixReviews(
+    projectPath: string,
+    projectId: string,
+    reviewIds: number[]
+  ): Promise<{ fixed: number; confirmed: number; failed: number }> {
+    const db = await getDatabase();
+    const reviews = reviewIds
+      .map(id => db.getReview(id))
+      .filter((r: any): r is NonNullable<typeof r> => r != null && r.project_id === projectId);
+
+    if (reviews.length === 0) return { fixed: 0, confirmed: 0, failed: 0 };
+
+    const codeReviewer = new CodeReviewer();
+    let fixed = 0;
+    let confirmed = 0;
+    let failed = 0;
+
+    for (const review of reviews) {
+      try {
+        const isValidFilePath = review.file_path
+          && /\.(ts|tsx|js|jsx|vue|svelte|py|java|go|rs|cs|css|scss|html|json|yaml|yml)$/.test(review.file_path)
+          && fs.existsSync(path.join(projectPath, review.file_path));
+
+        if (!isValidFilePath) {
+          db.updateReview(review.id, {
+            status: 'confirmed',
+            resolved_at: new Date().toISOString(),
+          });
+          confirmed++;
+
+          // Update associated task status to 'completed' for confirmed reviews
+          try {
+            const tasks = db.getTasksByReviewId(review.id);
+            for (const task of tasks) {
+              db.updateTask(task.id, {
+                status: 'completed',
+                updated_at: new Date().toISOString(),
+              });
+            }
+          } catch (error: any) {
+            logger.warn(`[DesignChecker] Failed to update tasks for review ${review.id}: ${error.message}`);
+          }
+        } else {
+          const filePath = review.file_path!;
+          const fix = await codeReviewer.generateFix(
+            projectPath,
+            filePath,
+            {
+              title: review.title,
+              description: review.description || review.title,
+              suggestion: review.suggestion || undefined,
+            }
+          );
+
+          if (!fix) {
+            failed++;
+            continue;
+          }
+
+          const fullPath = path.join(projectPath, filePath);
+          const resolvedPath = path.resolve(fullPath);
+          if (!resolvedPath.startsWith(path.resolve(projectPath))) {
+            failed++;
+            continue;
+          }
+
+          await fs.promises.writeFile(fullPath, fix.fixedContent, 'utf-8');
+          db.updateReview(review.id, { status: 'fixed', resolved_at: new Date().toISOString() });
+          fixed++;
+
+          // Update associated task status to 'completed' for fixed reviews
+          try {
+            const tasks = db.getTasksByReviewId(review.id);
+            for (const task of tasks) {
+              db.updateTask(task.id, {
+                status: 'completed',
+                updated_at: new Date().toISOString(),
+              });
+            }
+          } catch (error: any) {
+            logger.warn(`[DesignChecker] Failed to update tasks for review ${review.id}: ${error.message}`);
+          }
+        }
+      } catch (error: any) {
+        logger.error(`[DesignChecker] Auto-fix failed for review ${review.id}: ${error.message}`);
+        failed++;
+      }
+    }
+
+    return { fixed, confirmed, failed };
+  }
+
+  /**
+   * Git commit and push fixed files
+   */
+  private async commitAndPush(projectPath: string, projectName: string, fixedCount: number): Promise<void> {
+    try {
+      const git = simpleGit(projectPath);
+
+      // Check if it's a git repo
+      const isRepo = await git.status().then(() => true).catch(() => false);
+      if (!isRepo) {
+        logger.info(`[DesignChecker] "${projectName}" is not a git repo, skipping commit`);
+        return;
+      }
+
+      // Check for changes
+      const status = await git.status();
+      if (status.staged.length === 0 && status.modified.length === 0 && status.not_added.length === 0) {
+        logger.info(`[DesignChecker] No changes to commit for "${projectName}"`);
+        return;
+      }
+
+      // Stage all changes
+      await git.add('-A');
+
+      // Commit
+      const commitMsg = `fix(auto): design consistency auto-fix (${fixedCount} files)`;
+      await git.commit(commitMsg);
+
+      // Push to remote
+      const remotes = await git.getRemotes();
+      if (remotes.length > 0) {
+        const branch = status.current || 'main';
+        await git.push('origin', branch);
+        logger.info(`[DesignChecker] Pushed auto-fix commit to "${projectName}" (${branch})`);
+      } else {
+        logger.info(`[DesignChecker] No remote configured for "${projectName}", commit only`);
+      }
+    } catch (error: any) {
+      logger.error(`[DesignChecker] Git commit/push failed for "${projectName}": ${error.message}`);
+    }
+  }
+
+  /**
+   * Try to infer the correct file path from an invalid one.
+   * Uses keyword matching between the finding title/description and source file paths.
+   */
+  private inferFilePath(
+    invalidPath: string,
+    title: string,
+    description: string,
+    sourceFiles: Array<{ relativePath: string }>
+  ): string | null {
+    const text = `${title} ${description}`.toLowerCase();
+
+    // Priority-ordered keyword → file path mapping
+    // More specific patterns first, broader patterns later
+    const keywordPatterns: Array<{ pattern: RegExp; filePattern: RegExp }> = [
+      // DesignChecker itself
+      { pattern: /designcheck|design.?checker/, filePattern: /designChecker\.ts$/ },
+      // Review routes (审查 + 端点/路由/批准/忽略/修复)
+      { pattern: /审查.*(端点|路由|批准|忽略|修复|fix)|review.*(route|endpoint|fix)/, filePattern: /routes\/reviews?\.ts$/ },
+      // Chat/WebSocket + endpoint/route
+      { pattern: /(聊天|chat|websocket|ws|sse).*(端点|路由|endpoint|route)|endpoint.*(chat|sse|ws)/, filePattern: /routes\/teams?\.ts$/ },
+      // Config routes
+      { pattern: /配置.*(路由|route|endpoint|端点)/, filePattern: /routes\/config\.ts$/ },
+      // Task + dashboard store
+      { pattern: /任务.*(状态|同步|store|dashboard)|dashboard.*task/, filePattern: /stores\/dashboard\.ts$/ },
+      // Chat + create task
+      { pattern: /聊天.*创建.*任务|chat.*create.*task/, filePattern: /routes\/teams?\.ts$/ },
+      // Scanner/DesignChecker
+      { pattern: /扫描|scanner/, filePattern: /designChecker\.ts$/ },
+      // Review (broader)
+      { pattern: /审查|review/, filePattern: /routes\/reviews?\.ts$/ },
+      // Chat/WebSocket (broader)
+      { pattern: /聊天|chat|websocket|ws|sse/, filePattern: /routes\/teams?\.ts$/ },
+      // Task-related
+      { pattern: /任务|task/, filePattern: /stores\/dashboard\.ts$/ },
+      // Config
+      { pattern: /配置|config/, filePattern: /config\.ts$/ },
+      // Analysis pipeline
+      { pattern: /分析|analysis|pipeline/, filePattern: /pipeline\.ts$/ },
+      // State management
+      { pattern: /状态|state|store|pinia/, filePattern: /stores?\/.*\.ts$/ },
+      // API routes
+      { pattern: /路由|route|endpoint|端点/, filePattern: /routes?\/.*\.ts$/ },
+      // Database
+      { pattern: /数据库|database|sqlite|db/, filePattern: /db\.ts$/ },
+      // Knowledge base
+      { pattern: /知识库|knowledge/, filePattern: /knowledge\/.*\.ts$/ },
+    ];
+
+    // Try keyword matching (first match wins due to priority ordering)
+    for (const { pattern, filePattern } of keywordPatterns) {
+      if (pattern.test(text)) {
+        const match = sourceFiles.find(f => filePattern.test(f.relativePath));
+        if (match) return match.relativePath;
+      }
+    }
+
+    // Try partial path matching (e.g., "reviews.ts" in "设计文档" might match "src/worker/routes/reviews.ts")
+    const invalidParts = invalidPath.replace(/[/\\]/g, ' ').split(/\s+/).filter(p => p.length > 2);
+    for (const part of invalidParts) {
+      const match = sourceFiles.find(f => f.relativePath.toLowerCase().includes(part.toLowerCase()));
+      if (match) return match.relativePath;
+    }
+
+    return null;
   }
 }
