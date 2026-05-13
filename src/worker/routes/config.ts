@@ -94,20 +94,20 @@ function loadAIConfig(): {
   if (override.ai?.fixerModel) fixerModel = override.ai.fixerModel;
   if (override.analysis?.maxRetries) maxRetries = override.analysis.maxRetries;
 
-  // Per-agent config
+  // Per-agent config (never expose raw apiKey to frontend)
   const scannerAgent = override.ai?.scanner;
   const fixerAgent = override.ai?.fixer;
 
   const scanner = scannerAgent ? {
     model: scannerAgent.model,
-    apiKey: scannerAgent.apiKey,
+    hasApiKey: !!scannerAgent.apiKey,
     maskedApiKey: maskApiKey(scannerAgent.apiKey || ''),
     baseUrl: scannerAgent.baseUrl,
   } : undefined;
 
   const fixer = fixerAgent ? {
     model: fixerAgent.model,
-    apiKey: fixerAgent.apiKey,
+    hasApiKey: !!fixerAgent.apiKey,
     maskedApiKey: maskApiKey(fixerAgent.apiKey || ''),
     baseUrl: fixerAgent.baseUrl,
   } : undefined;
@@ -147,6 +147,9 @@ function saveAIConfig(model: string, baseUrl: string, apiKey: string, maxRetries
 
   // Save non-sensitive config to config.json
   const current = loadConfigOverride();
+  // Preserve old per-agent keys BEFORE replacing ai object (line below destroys current.ai.scanner)
+  const oldScannerKey = current.ai?.scanner?.apiKey;
+  const oldFixerKey = current.ai?.fixer?.apiKey;
   current.ai = {
     model,
     baseUrl,
@@ -159,14 +162,16 @@ function saveAIConfig(model: string, baseUrl: string, apiKey: string, maxRetries
   if (agentConfigs?.scanner) {
     current.ai.scanner = {
       model: agentConfigs.scanner.model,
-      apiKey: agentConfigs.scanner.apiKey || current.ai.scanner?.apiKey,
+      // Only keep old key when frontend sent explicit undefined (didn't send the field at all).
+      // Empty string from frontend = user cleared the key, so we clear it too.
+      apiKey: agentConfigs.scanner.apiKey !== undefined ? agentConfigs.scanner.apiKey : oldScannerKey,
       baseUrl: agentConfigs.scanner.baseUrl,
     };
   }
   if (agentConfigs?.fixer) {
     current.ai.fixer = {
       model: agentConfigs.fixer.model,
-      apiKey: agentConfigs.fixer.apiKey || current.ai.fixer?.apiKey,
+      apiKey: agentConfigs.fixer.apiKey !== undefined ? agentConfigs.fixer.apiKey : oldFixerKey,
       baseUrl: agentConfigs.fixer.baseUrl,
     };
   }
@@ -353,27 +358,44 @@ export function registerConfigRoutes(app: Express): void {
   /**
    * POST /api/config/ai-test
    * Test AI connection by making a real API call.
-   * Uses ONLY the key from the UI input or the saved .env file.
-   * Does NOT fall back to ANTHROPIC_AUTH_TOKEN from the start script,
-   * so the user can verify the key they typed actually works.
+   * Accepts optional `target`: 'shared' (default), 'scanner', or 'fixer'.
+   * When target is 'scanner'/'fixer', loads that agent's saved key/model/baseUrl from config.json.
+   * Explicit body params (model, baseUrl, apiKey) override the saved values.
    */
   app.post('/api/config/ai-test', async (req: Request, res: Response) => {
     try {
-      // Only use the key from UI input or the user's saved .env file.
-      // Do NOT fall back to process.env (start-worker.cmd token),
-      // so the user can verify the key they actually saved.
-      const savedApiKey = loadSavedApiKey();
-      const savedConfig = loadAIConfigFromEnv();
-      const testModel = req.body.model || savedConfig.model || 'claude-sonnet-4-6';
-      const testBaseUrl = req.body.baseUrl || savedConfig.baseUrl || process.env.ANTHROPIC_BASE_URL;
-      const testApiKey = req.body.apiKey || savedApiKey;
+      const target = req.body.target || 'shared';
+      const override = loadConfigOverride();
+
+      let testModel: string;
+      let testBaseUrl: string | undefined;
+      let testApiKey: string;
+      let keySource: string;
+
+      if (target === 'scanner' || target === 'fixer') {
+        const agent = override.ai?.[target];
+        // Per-agent: raw key comes from config.json (saved by saveAIConfig)
+        const agentRawKey = agent?.apiKey || '';
+        testApiKey = req.body.apiKey || agentRawKey;
+        testModel = req.body.model || agent?.model || override.ai?.model || 'claude-sonnet-4-6';
+        testBaseUrl = req.body.baseUrl || agent?.baseUrl || override.ai?.baseUrl || process.env.ANTHROPIC_BASE_URL;
+        keySource = req.body.apiKey ? 'input' : (agentRawKey ? `saved-${target}` : 'none');
+      } else {
+        // Shared: key comes from .env file or process env
+        const savedApiKey = loadSavedApiKey();
+        const savedConfig = loadAIConfigFromEnv();
+        testApiKey = req.body.apiKey || savedApiKey;
+        testModel = req.body.model || savedConfig.model || 'claude-sonnet-4-6';
+        testBaseUrl = req.body.baseUrl || savedConfig.baseUrl || process.env.ANTHROPIC_BASE_URL;
+        keySource = req.body.apiKey ? 'input' : (savedApiKey ? 'saved' : 'none');
+      }
 
       if (!testApiKey) {
-        res.json({ success: false, message: 'No API key provided. Please enter your API key and click Save first.' });
+        const targetLabel = target === 'shared' ? 'Shared config' : `${target.charAt(0).toUpperCase() + target.slice(1)} agent`;
+        res.json({ success: false, message: `No API key for ${targetLabel}. Please enter an API key and click Save first.` });
         return;
       }
 
-      const keySource = req.body.apiKey ? 'input' : 'saved';
       const maskedKey = maskApiKey(testApiKey);
 
       const clientOptions: { apiKey: string; baseURL?: string } = { apiKey: testApiKey };
@@ -396,13 +418,15 @@ export function registerConfigRoutes(app: Express): void {
         .map(block => block.text)
         .join('');
 
+      const targetLabel = target === 'shared' ? 'Shared' : target.charAt(0).toUpperCase() + target.slice(1);
       res.json({
         success: true,
-        message: `Connection successful. Key used: ${maskedKey} (${keySource}), Model: ${testModel}, Latency: ${latency}ms`,
+        message: `${targetLabel} connection successful. Key: ${maskedKey} (${keySource}), Model: ${testModel}, Latency: ${latency}ms`,
         latency,
         model: testModel,
         maskedKey,
         keySource,
+        target,
       });
     } catch (error: any) {
       logger.error('AI connection test failed', error);

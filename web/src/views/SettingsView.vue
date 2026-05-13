@@ -79,6 +79,14 @@
             <input v-model="aiConfig.scannerBaseUrl" class="form-input" placeholder="Leave empty to inherit shared base URL" />
             <span class="form-hint">Custom endpoint for this agent (e.g. a different provider)</span>
           </div>
+          <div class="form-actions">
+            <button class="btn-secondary" @click="testAiConnection('scanner')" :disabled="testing">
+              {{ testing ? 'Testing...' : 'Test Scanner Connection' }}
+            </button>
+          </div>
+          <div v-if="agentTestResults.scanner" class="test-result" :class="agentTestResults.scanner.success ? 'success' : 'error'">
+            {{ agentTestResults.scanner.message }}
+          </div>
         </div>
 
         <div class="section">
@@ -109,6 +117,14 @@
             <label class="form-label">Fixer Base URL</label>
             <input v-model="aiConfig.fixerBaseUrl" class="form-input" placeholder="Leave empty to inherit shared base URL" />
             <span class="form-hint">Custom endpoint for this agent (e.g. a different provider)</span>
+          </div>
+          <div class="form-actions">
+            <button class="btn-secondary" @click="testAiConnection('fixer')" :disabled="testing">
+              {{ testing ? 'Testing...' : 'Test Fixer Connection' }}
+            </button>
+          </div>
+          <div v-if="agentTestResults.fixer" class="test-result" :class="agentTestResults.fixer.success ? 'success' : 'error'">
+            {{ agentTestResults.fixer.message }}
           </div>
         </div>
 
@@ -334,6 +350,7 @@ const showScannerApiKey = ref(false)
 const showFixerApiKey = ref(false)
 const testing = ref(false)
 const aiTestResult = ref<{ success: boolean; message: string } | null>(null)
+const agentTestResults = reactive<Record<string, { success: boolean; message: string } | null>>({})
 
 // Teams
 const teams = ref<TeamConfig[]>([])
@@ -446,27 +463,27 @@ async function saveAiConfig() {
   saving.value = true
   try {
     // If apiKey still contains "..." (masked), it means user didn't edit it.
-    // Send empty so backend keeps the existing saved key.
-    const apiKeyToSend = aiConfig.apiKey.includes('...') ? '' : aiConfig.apiKey
-    const scannerApiKeyToSend = aiConfig.scannerApiKey.includes('...') ? '' : aiConfig.scannerApiKey
-    const fixerApiKeyToSend = aiConfig.fixerApiKey.includes('...') ? '' : aiConfig.fixerApiKey
+    // Send undefined so backend keeps the existing saved key.
+    const apiKeyToSend = aiConfig.apiKey.includes('...') ? undefined : aiConfig.apiKey
+    const scannerApiKeyToSend = aiConfig.scannerApiKey.includes('...') ? undefined : (aiConfig.scannerApiKey || undefined)
+    const fixerApiKeyToSend = aiConfig.fixerApiKey.includes('...') ? undefined : (aiConfig.fixerApiKey || undefined)
 
-    // Build per-agent payloads (only send when user typed something new)
-    const scannerPayload = (scannerApiKeyToSend || aiConfig.scannerBaseUrl || aiConfig.scannerModel) ? {
+    // Build per-agent payloads
+    const scannerPayload = (scannerApiKeyToSend !== undefined || aiConfig.scannerBaseUrl || aiConfig.scannerModel) ? {
       model: aiConfig.scannerModel || undefined,
-      apiKey: scannerApiKeyToSend || undefined,
+      apiKey: scannerApiKeyToSend,
       baseUrl: aiConfig.scannerBaseUrl || undefined,
     } : undefined
-    const fixerPayload = (fixerApiKeyToSend || aiConfig.fixerBaseUrl || aiConfig.fixerModel) ? {
+    const fixerPayload = (fixerApiKeyToSend !== undefined || aiConfig.fixerBaseUrl || aiConfig.fixerModel) ? {
       model: aiConfig.fixerModel || undefined,
-      apiKey: fixerApiKeyToSend || undefined,
+      apiKey: fixerApiKeyToSend,
       baseUrl: aiConfig.fixerBaseUrl || undefined,
     } : undefined
 
     await configApi.saveAI({
       model: aiConfig.model,
       baseUrl: aiConfig.baseUrl,
-      apiKey: apiKeyToSend,
+      apiKey: apiKeyToSend || '',
       maxRetries: aiConfig.maxRetries,
       scannerModel: aiConfig.scannerModel || undefined,
       fixerModel: aiConfig.fixerModel || undefined,
@@ -482,22 +499,37 @@ async function saveAiConfig() {
   }
 }
 
-async function testAiConnection() {
+async function testAiConnection(target: 'shared' | 'scanner' | 'fixer' = 'shared') {
   testing.value = true
   aiTestResult.value = null
+  agentTestResults[target] = null
   try {
-    // If apiKey is masked (contains "..."), don't send it — let backend use the real saved key.
-    // If user typed a new key, send it for testing.
-    const apiKeyToSend = aiConfig.apiKey.includes('...') ? undefined : (aiConfig.apiKey || undefined)
+    let payload: Record<string, any> = { target }
 
-    const result = await configApi.testAI({
-      model: aiConfig.model || undefined,
-      baseUrl: aiConfig.baseUrl || undefined,
-      apiKey: apiKeyToSend,
-    })
-    aiTestResult.value = result
+    if (target === 'scanner') {
+      const key = aiConfig.scannerApiKey.includes('...') ? undefined : (aiConfig.scannerApiKey || undefined)
+      payload = { ...payload, model: aiConfig.scannerModel || undefined, baseUrl: aiConfig.scannerBaseUrl || undefined, apiKey: key }
+    } else if (target === 'fixer') {
+      const key = aiConfig.fixerApiKey.includes('...') ? undefined : (aiConfig.fixerApiKey || undefined)
+      payload = { ...payload, model: aiConfig.fixerModel || undefined, baseUrl: aiConfig.fixerBaseUrl || undefined, apiKey: key }
+    } else {
+      const key = aiConfig.apiKey.includes('...') ? undefined : (aiConfig.apiKey || undefined)
+      payload = { ...payload, model: aiConfig.model || undefined, baseUrl: aiConfig.baseUrl || undefined, apiKey: key }
+    }
+
+    const result = await configApi.testAI(payload as any)
+    if (target === 'shared') {
+      aiTestResult.value = result
+    } else {
+      agentTestResults[target] = result
+    }
   } catch (e: any) {
-    aiTestResult.value = { success: false, message: e.message || 'Connection test failed' }
+    const err = { success: false, message: e.message || 'Connection test failed' }
+    if (target === 'shared') {
+      aiTestResult.value = err
+    } else {
+      agentTestResults[target] = err
+    }
   } finally {
     testing.value = false
   }

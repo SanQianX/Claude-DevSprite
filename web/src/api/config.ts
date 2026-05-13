@@ -45,8 +45,8 @@ export interface SystemConfig {
     maxRetries: number
     scannerModel: string
     fixerModel: string
-    scanner?: { model?: string; apiKey?: string; maskedApiKey?: string; baseUrl?: string }
-    fixer?: { model?: string; apiKey?: string; maskedApiKey?: string; baseUrl?: string }
+    scanner?: { model?: string; hasApiKey?: boolean; maskedApiKey?: string; baseUrl?: string }
+    fixer?: { model?: string; hasApiKey?: boolean; maskedApiKey?: string; baseUrl?: string }
   }
   dbPath?: string
 }
