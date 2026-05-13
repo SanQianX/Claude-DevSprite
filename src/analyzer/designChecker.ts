@@ -235,6 +235,9 @@ export class DesignChecker {
     }
 
     // 7. Save findings to database
+    // Note: Design check results are stored in the 'reviews' table via createReviewsBatch.
+    // The 'source' field is set to 'design-check' to distinguish these records.
+    // This implementation choice should be documented in the design documents.
     const db = await getDatabase();
     if (result.findings.length > 0) {
       const reviews = result.findings.map(finding => ({
@@ -253,28 +256,10 @@ export class DesignChecker {
       }));
       db.createReviewsBatch(reviews);
 
-      // 7.5 Create tasks for each review to sync with task management module
+      // 7.5 Auto-fix newly created reviews
       const pendingReviews = db.getPendingReviews(projectId)
         .filter((r: any) => r.source === 'design-check');
 
-      for (const review of pendingReviews) {
-        try {
-          const task = {
-            project_id: projectId,
-            title: `设计检查任务: ${review.title}`,
-            description: review.description || review.title,
-            status: 'open',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            review_id: review.id, // Link task to review for state synchronization
-          };
-          db.createTask(task);
-        } catch (error: any) {
-          logger.warn(`[DesignChecker] Failed to create task for review ${review.id}: ${error.message}`);
-        }
-      }
-
-      // 8. Auto-fix newly created reviews
       const newReviewIds = pendingReviews.map((r: any) => r.id)
         .filter((id: number) => {
           // Only fix reviews that were just created (in this batch)
@@ -484,19 +469,6 @@ export class DesignChecker {
             resolved_at: new Date().toISOString(),
           });
           confirmed++;
-
-          // Update associated task status to 'completed' for confirmed reviews
-          try {
-            const tasks = db.getTasksByReviewId(review.id);
-            for (const task of tasks) {
-              db.updateTask(task.id, {
-                status: 'completed',
-                updated_at: new Date().toISOString(),
-              });
-            }
-          } catch (error: any) {
-            logger.warn(`[DesignChecker] Failed to update tasks for review ${review.id}: ${error.message}`);
-          }
         } else {
           const filePath = review.file_path!;
           const fix = await codeReviewer.generateFix(
@@ -524,19 +496,6 @@ export class DesignChecker {
           await fs.promises.writeFile(fullPath, fix.fixedContent, 'utf-8');
           db.updateReview(review.id, { status: 'fixed', resolved_at: new Date().toISOString() });
           fixed++;
-
-          // Update associated task status to 'completed' for fixed reviews
-          try {
-            const tasks = db.getTasksByReviewId(review.id);
-            for (const task of tasks) {
-              db.updateTask(task.id, {
-                status: 'completed',
-                updated_at: new Date().toISOString(),
-              });
-            }
-          } catch (error: any) {
-            logger.warn(`[DesignChecker] Failed to update tasks for review ${review.id}: ${error.message}`);
-          }
         }
       } catch (error: any) {
         logger.error(`[DesignChecker] Auto-fix failed for review ${review.id}: ${error.message}`);
