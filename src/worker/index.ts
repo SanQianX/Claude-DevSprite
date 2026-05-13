@@ -5,7 +5,8 @@
 
 import { startServer } from './server';
 import { logger } from '../utils/logger';
-import { DesignChecker } from '../analyzer/designChecker';
+import { DesignScanner } from '../analyzer/designScanner';
+import { DesignFixer } from '../analyzer/designFixer';
 import { closeDatabase } from './db';
 
 // Catch unhandled promise rejections to prevent crash
@@ -39,10 +40,15 @@ export async function startWorker(): Promise<void> {
   try {
     await startServer();
 
-    // Start background design consistency checker
-    const designChecker = new DesignChecker({ scanIntervalMs: 10 * 60 * 1000 });
-    designChecker.startScanner();
-    logger.info('Design consistency checker background scanner started');
+    // Start background scanner agent (finds issues only)
+    const scanner = new DesignScanner({ scanIntervalMs: 10 * 60 * 1000 });
+    scanner.startScanner();
+    logger.info('Design scanner agent started');
+
+    // Start background fixer agent (fixes pending issues, default disabled)
+    const fixer = new DesignFixer({ fixIntervalMs: 5 * 60 * 1000 });
+    // Fixer starts disabled — user enables it via dashboard/config
+    logger.info('Design fixer agent initialized (disabled by default)');
   } catch (error) {
     logger.error('Failed to start worker', error);
     process.exit(1);

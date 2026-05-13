@@ -51,11 +51,13 @@ function maskApiKey(key: string): string {
 /**
  * Load current AI config from env file, process env, and config override
  */
-function loadAIConfig(): { model: string; baseUrl: string; hasApiKey: boolean; maskedApiKey: string; maxRetries: number } {
+function loadAIConfig(): { model: string; baseUrl: string; hasApiKey: boolean; maskedApiKey: string; maxRetries: number; scannerModel: string; fixerModel: string } {
   let model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
   let baseUrl = process.env.ANTHROPIC_BASE_URL || '';
   let apiKey = process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '';
   let maxRetries = 3;
+  let scannerModel = '';
+  let fixerModel = '';
 
   // Load from AI env file
   if (fs.existsSync(AI_ENV_FILE)) {
@@ -82,15 +84,17 @@ function loadAIConfig(): { model: string; baseUrl: string; hasApiKey: boolean; m
   if (override.ai?.model) model = override.ai.model;
   if (override.ai?.baseUrl !== undefined) baseUrl = override.ai.baseUrl;
   if (override.ai?.apiKey) apiKey = override.ai.apiKey;
+  if (override.ai?.scannerModel) scannerModel = override.ai.scannerModel;
+  if (override.ai?.fixerModel) fixerModel = override.ai.fixerModel;
   if (override.analysis?.maxRetries) maxRetries = override.analysis.maxRetries;
 
-  return { model, baseUrl, hasApiKey: !!apiKey, maskedApiKey: maskApiKey(apiKey), maxRetries };
+  return { model, baseUrl, hasApiKey: !!apiKey, maskedApiKey: maskApiKey(apiKey), maxRetries, scannerModel, fixerModel };
 }
 
 /**
  * Save AI config to both the env file and config override
  */
-function saveAIConfig(model: string, baseUrl: string, apiKey: string, maxRetries: number): void {
+function saveAIConfig(model: string, baseUrl: string, apiKey: string, maxRetries: number, scannerModel?: string, fixerModel?: string): void {
   // If apiKey is empty, keep the existing one from env/process
   const currentConfig = loadAIConfigFromEnv();
   const effectiveApiKey = apiKey || currentConfig.apiKey || process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '';
@@ -124,6 +128,8 @@ function saveAIConfig(model: string, baseUrl: string, apiKey: string, maxRetries
     baseUrl,
     hasApiKey: !!effectiveApiKey,
   };
+  if (scannerModel !== undefined) current.ai.scannerModel = scannerModel;
+  if (fixerModel !== undefined) current.ai.fixerModel = fixerModel;
   current.analysis = {
     ...current.analysis,
     maxRetries,
@@ -250,6 +256,8 @@ export function registerConfigRoutes(app: Express): void {
         hasApiKey: aiConfig.hasApiKey,
         maskedApiKey: aiConfig.maskedApiKey,
         maxRetries: aiConfig.maxRetries,
+        scannerModel: aiConfig.scannerModel,
+        fixerModel: aiConfig.fixerModel,
       },
       dbPath: dbPath.replace(process.env.HOME || process.env.USERPROFILE || '', '~'),
     };
@@ -266,9 +274,9 @@ export function registerConfigRoutes(app: Express): void {
    */
   app.post('/api/config/ai', (req: Request, res: Response) => {
     try {
-      const { model, baseUrl, apiKey, maxRetries } = req.body;
+      const { model, baseUrl, apiKey, maxRetries, scannerModel, fixerModel } = req.body;
 
-      if (!model && !baseUrl && apiKey === undefined && maxRetries === undefined) {
+      if (!model && !baseUrl && apiKey === undefined && maxRetries === undefined && scannerModel === undefined && fixerModel === undefined) {
         res.status(400).json({ status: 'error', message: 'No AI config fields provided' });
         return;
       }
@@ -280,6 +288,8 @@ export function registerConfigRoutes(app: Express): void {
         baseUrl !== undefined ? baseUrl : current.baseUrl,
         apiKey || '',  // Empty string means keep existing (loadAIConfig handles this)
         maxRetries ?? current.maxRetries,
+        scannerModel ?? current.scannerModel,
+        fixerModel ?? current.fixerModel,
       );
 
       const updated = loadAIConfig();

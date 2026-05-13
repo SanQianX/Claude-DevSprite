@@ -89,7 +89,7 @@
           <div class="scan-controls">
             <label class="scan-toggle">
               <input type="checkbox" v-model="autoScanEnabled" @change="toggleAutoScan" />
-              <span class="scan-toggle-label">定时扫描</span>
+              <span class="scan-toggle-label">扫描定时器</span>
             </label>
             <select
               v-if="autoScanEnabled"
@@ -103,13 +103,30 @@
               <option :value="30">30 分钟</option>
               <option :value="60">1 小时</option>
             </select>
-            <label class="scan-toggle">
-              <input type="checkbox" v-model="autoFixAfterScan" />
-              <span class="scan-toggle-label">自动修复</span>
-            </label>
             <button class="scan-btn" :disabled="scanning" @click="startScan">
               {{ scanning ? scanStatusText : '开始扫描' }}
             </button>
+            <span class="scan-divider"></span>
+            <label class="scan-toggle">
+              <input type="checkbox" v-model="autoFixerEnabled" @change="toggleAutoFixer" />
+              <span class="scan-toggle-label">修复定时器</span>
+            </label>
+            <select
+              v-if="autoFixerEnabled"
+              class="scan-interval-select"
+              v-model="fixerIntervalMinutes"
+              @change="updateFixerInterval"
+            >
+              <option :value="5">5 分钟</option>
+              <option :value="10">10 分钟</option>
+              <option :value="15">15 分钟</option>
+              <option :value="30">30 分钟</option>
+              <option :value="60">1 小时</option>
+            </select>
+            <label class="scan-toggle">
+              <input type="checkbox" v-model="autoFixAfterScan" />
+              <span class="scan-toggle-label">扫描后自动修复</span>
+            </label>
           </div>
         </div>
         <div class="review-filters">
@@ -241,6 +258,8 @@ watch(autoFixAfterScan, (val) => {
 })
 const autoScanEnabled = ref(true)
 const scanIntervalMinutes = ref(10)
+const autoFixerEnabled = ref(false)
+const fixerIntervalMinutes = ref(5)
 
 const projectColor = ref('#f97316')
 const projectPath = ref('')
@@ -387,6 +406,22 @@ async function updateScanInterval() {
   }
 }
 
+async function toggleAutoFixer() {
+  try {
+    await dashboardStore.updateFixerConfig({ enabled: autoFixerEnabled.value })
+  } catch (e) {
+    console.error('Failed to update fixer config:', e)
+  }
+}
+
+async function updateFixerInterval() {
+  try {
+    await dashboardStore.updateFixerConfig({ intervalMs: fixerIntervalMinutes.value * 60 * 1000 })
+  } catch (e) {
+    console.error('Failed to update fixer interval:', e)
+  }
+}
+
 async function startAnalysis() {
   analyzing.value = true
   try {
@@ -511,11 +546,13 @@ onMounted(async () => {
     }
   } catch { /* ignore */ }
 
-  // Fetch tasks, reviews, and scanner config from API
+  // Fetch tasks, reviews, scanner config, and fixer config from API
   await dashboardStore.fetchAll(props.projectName)
-  await dashboardStore.fetchScannerConfig()
+  await Promise.all([dashboardStore.fetchScannerConfig(), dashboardStore.fetchFixerConfig()])
   autoScanEnabled.value = dashboardStore.scannerConfig.enabled
   scanIntervalMinutes.value = Math.round(dashboardStore.scannerConfig.intervalMs / 60000)
+  autoFixerEnabled.value = dashboardStore.fixerConfig.enabled
+  fixerIntervalMinutes.value = Math.round(dashboardStore.fixerConfig.intervalMs / 60000)
 
   // Restore scanning state from backend
   if (dashboardStore.scannerConfig.isScanning) {
@@ -774,6 +811,13 @@ onMounted(async () => {
   color: #475569;
   background: #fff;
   cursor: pointer;
+}
+
+.scan-divider {
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+  margin: 0 4px;
 }
 
 .analyze-btn {

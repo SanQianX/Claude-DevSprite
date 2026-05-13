@@ -21,13 +21,9 @@
       <!-- AI Model Config -->
       <div v-if="activeTab === 'ai'" class="tab-panel">
         <div class="section">
-          <h3 class="section-title">AI Provider Configuration</h3>
-          <p class="section-desc">Configure the AI model used for analysis. Changes take effect on next analysis run.</p>
+          <h3 class="section-title">Shared Configuration</h3>
+          <p class="section-desc">Base AI settings shared by both scanner and fixer agents.</p>
 
-          <div class="form-group">
-            <label class="form-label">Model Name</label>
-            <input v-model="aiConfig.model" class="form-input" placeholder="e.g. claude-sonnet-4-20250514" />
-          </div>
           <div class="form-group">
             <label class="form-label">Base URL</label>
             <input v-model="aiConfig.baseUrl" class="form-input" placeholder="https://api.anthropic.com" />
@@ -52,17 +48,40 @@
             <label class="form-label">Max Retries</label>
             <input v-model.number="aiConfig.maxRetries" class="form-input" type="number" min="0" max="10" />
           </div>
-          <div class="form-actions">
-            <button class="btn-primary" @click="saveAiConfig" :disabled="saving">
-              {{ saving ? 'Saving...' : 'Save AI Config' }}
-            </button>
-            <button class="btn-secondary" @click="testAiConnection" :disabled="testing">
-              {{ testing ? 'Testing...' : 'Test Connection' }}
-            </button>
+        </div>
+
+        <div class="section">
+          <h3 class="section-title">Scanner Agent</h3>
+          <p class="section-desc">AI model used for design consistency analysis (finds issues only).</p>
+
+          <div class="form-group">
+            <label class="form-label">Scanner Model</label>
+            <input v-model="aiConfig.scannerModel" class="form-input" placeholder="e.g. claude-sonnet-4-6" />
+            <span class="form-hint">Leave empty to use the default model above</span>
           </div>
-          <div v-if="aiTestResult" class="test-result" :class="aiTestResult.success ? 'success' : 'error'">
-            {{ aiTestResult.message }}
+        </div>
+
+        <div class="section">
+          <h3 class="section-title">Fixer Agent</h3>
+          <p class="section-desc">AI model used for code fix generation (fixes issues + git commit).</p>
+
+          <div class="form-group">
+            <label class="form-label">Fixer Model</label>
+            <input v-model="aiConfig.fixerModel" class="form-input" placeholder="e.g. claude-haiku-4-5-20251001" />
+            <span class="form-hint">Leave empty to use the default model above</span>
           </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn-primary" @click="saveAiConfig" :disabled="saving">
+            {{ saving ? 'Saving...' : 'Save AI Config' }}
+          </button>
+          <button class="btn-secondary" @click="testAiConnection" :disabled="testing">
+            {{ testing ? 'Testing...' : 'Test Connection' }}
+          </button>
+        </div>
+        <div v-if="aiTestResult" class="test-result" :class="aiTestResult.success ? 'success' : 'error'">
+          {{ aiTestResult.message }}
         </div>
       </div>
 
@@ -263,6 +282,8 @@ const aiConfig = reactive({
   baseUrl: '',
   apiKey: '',
   maxRetries: 3,
+  scannerModel: '',
+  fixerModel: '',
 })
 const showApiKey = ref(false)
 const testing = ref(false)
@@ -311,6 +332,8 @@ async function loadConfig() {
     // Show masked key so user knows a key is saved; empty string means nothing saved
     aiConfig.apiKey = cfg.ai?.maskedApiKey || ''
     aiConfig.maxRetries = cfg.ai?.maxRetries || cfg.analysis?.maxRetries || 3
+    aiConfig.scannerModel = cfg.ai?.scannerModel || ''
+    aiConfig.fixerModel = cfg.ai?.fixerModel || ''
   } catch (e: any) {
     console.error('Failed to load config:', e)
   }
@@ -381,6 +404,8 @@ async function saveAiConfig() {
       baseUrl: aiConfig.baseUrl,
       apiKey: apiKeyToSend,
       maxRetries: aiConfig.maxRetries,
+      scannerModel: aiConfig.scannerModel || undefined,
+      fixerModel: aiConfig.fixerModel || undefined,
     })
     // Reload to reflect saved state (shows masked key again)
     await loadConfig()

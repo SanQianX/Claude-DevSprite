@@ -13,6 +13,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     isScanning: false,
   })
 
+  const fixerConfig = ref<{ enabled: boolean; intervalMs: number; isFixing: boolean }>({
+    enabled: false,
+    intervalMs: 5 * 60 * 1000,
+    isFixing: false,
+  })
+
   async function fetchTasks(projectName: string) {
     try {
       const { tasks: t } = await dashboardApi.getTasks(projectName)
@@ -124,11 +130,27 @@ export const useDashboardStore = defineStore('dashboard', () => {
     return result.config
   }
 
+  async function fetchFixerConfig() {
+    try {
+      const config = await dashboardApi.getFixerConfig()
+      fixerConfig.value = config
+    } catch {
+      // keep defaults
+    }
+  }
+
+  async function updateFixerConfig(config: { enabled?: boolean; intervalMs?: number }) {
+    const result = await dashboardApi.updateFixerConfig(config)
+    fixerConfig.value = result.config
+    return result.config
+  }
+
   return {
     tasks,
     reviews,
     loading,
     scannerConfig,
+    fixerConfig,
     fetchTasks,
     fetchReviews,
     fetchAll,
@@ -142,5 +164,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     batchFixReviews,
     fetchScannerConfig,
     updateScannerConfig,
+    fetchFixerConfig,
+    updateFixerConfig,
   }
 })

@@ -43,6 +43,8 @@ export interface SystemConfig {
     hasApiKey: boolean
     maskedApiKey: string
     maxRetries: number
+    scannerModel: string
+    fixerModel: string
   }
   dbPath?: string
 }
@@ -52,6 +54,8 @@ export interface AIConfigPayload {
   baseUrl?: string
   apiKey?: string
   maxRetries?: number
+  scannerModel?: string
+  fixerModel?: string
 }
 
 export interface AITestResult {

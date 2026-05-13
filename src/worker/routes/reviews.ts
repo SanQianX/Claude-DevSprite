@@ -8,16 +8,32 @@
 import type { Express, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { getDatabase } from '../db';
 import { CodeReviewer } from '../../analyzer/codeReviewer';
-import { DesignChecker } from '../../analyzer/designChecker';
+import { DesignScanner } from '../../analyzer/designScanner';
+import { DesignFixer } from '../../analyzer/designFixer';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('reviews');
 
+const CONFIG_OVERRIDE_FILE = path.join(os.homedir(), '.claude-dev-sprite', 'config.json');
+
+function loadConfigOverride(): Record<string, any> {
+  try {
+    if (fs.existsSync(CONFIG_OVERRIDE_FILE)) {
+      return JSON.parse(fs.readFileSync(CONFIG_OVERRIDE_FILE, 'utf-8'));
+    }
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
 let reviewer: CodeReviewer | null = null;
-let designChecker: DesignChecker | null = null;
+let scanner: DesignScanner | null = null;
+let fixer: DesignFixer | null = null;
 
 function getReviewer(): CodeReviewer {
   if (!reviewer) {
@@ -26,11 +42,22 @@ function getReviewer(): CodeReviewer {
   return reviewer;
 }
 
-function getDesignChecker(): DesignChecker {
-  if (!designChecker) {
-    designChecker = new DesignChecker();
+function getScanner(): DesignScanner {
+  if (!scanner) {
+    const override = loadConfigOverride();
+    const scannerModel = override.ai?.scannerModel || override.ai?.model;
+    scanner = new DesignScanner({ model: scannerModel });
   }
-  return designChecker;
+  return scanner;
+}
+
+function getFixer(): DesignFixer {
+  if (!fixer) {
+    const override = loadConfigOverride();
+    const fixerModel = override.ai?.fixerModel || override.ai?.model;
+    fixer = new DesignFixer({ model: fixerModel });
+  }
+  return fixer;
 }
 
 export function registerScannerConfigRoutes(app: Express): void {
@@ -39,8 +66,8 @@ export function registerScannerConfigRoutes(app: Express): void {
    * Get current scanner configuration
    */
   app.get('/api/scanner/config', asyncHandler(async (_req: Request, res: Response) => {
-    const checker = getDesignChecker();
-    res.json(checker.getConfig());
+    const s = getScanner();
+    res.json(s.getConfig());
   }));
 
   /**
@@ -49,9 +76,29 @@ export function registerScannerConfigRoutes(app: Express): void {
    */
   app.put('/api/scanner/config', asyncHandler(async (req: Request, res: Response) => {
     const { enabled, intervalMs } = req.body;
-    const checker = getDesignChecker();
-    checker.updateConfig({ enabled, intervalMs });
-    res.json({ message: '扫描配置已更新', config: checker.getConfig() });
+    const s = getScanner();
+    s.updateConfig({ enabled, intervalMs });
+    res.json({ message: '扫描配置已更新', config: s.getConfig() });
+  }));
+
+  /**
+   * GET /api/fixer/config
+   * Get current fixer configuration
+   */
+  app.get('/api/fixer/config', asyncHandler(async (_req: Request, res: Response) => {
+    const f = getFixer();
+    res.json(f.getFixerConfig());
+  }));
+
+  /**
+   * PUT /api/fixer/config
+   * Update fixer configuration (enabled, intervalMs)
+   */
+  app.put('/api/fixer/config', asyncHandler(async (req: Request, res: Response) => {
+    const { enabled, intervalMs } = req.body;
+    const f = getFixer();
+    f.updateFixerConfig({ enabled, intervalMs });
+    res.json({ message: '修复配置已更新', config: f.getFixerConfig() });
   }));
 }
 
@@ -86,8 +133,8 @@ export function registerReviewRoutes(app: Express): void {
     const project = db.getProject(projectName);
     if (!project) throw createError('Project not found', 404);
 
-    const checker = getDesignChecker();
-    const findingsCount = await checker.scanProject(project.id, project.path, project.name);
+    const s = getScanner();
+    const findingsCount = await s.scanProject(project.id, project.path, project.name);
 
     res.json({
       message: `功能一致性扫描完成，发现 ${findingsCount} 个不一致`,
