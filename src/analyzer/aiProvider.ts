@@ -24,11 +24,18 @@ interface AIConfig {
   retryDelayMs?: number;
 }
 
+// Define possible paths for AI config in the config.json file, in order of priority.
+// This is an internal implementation detail to support flexible configuration loading.
+// The paths are checked sequentially; the first non-null value is used.
+const AI_CONFIG_PATHS = ['aiProvider', 'analysis.aiProvider', 'server.aiProvider'];
+
 /**
  * Load AI configuration from file and environment variables.
- * File config: ~/.claude-dev-sprite/config.json under 'aiProvider' key
+ * File config: ~/.claude-dev-sprite/config.json. The function attempts to read AI configuration
+ * from paths defined in AI_CONFIG_PATHS, which aligns with the Config interface structure.
  * Environment variables: ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_BASE_URL, ANTHROPIC_MODEL
- * Priority: Environment variables override file config
+ * Priority: Environment variables override file config.
+ * Note: The multi-path reading is an internal implementation detail for flexibility and may not be documented in design documents.
  */
 function loadEnvConfig(): AIConfig {
   const config: AIConfig = {};
@@ -38,8 +45,20 @@ function loadEnvConfig(): AIConfig {
   if (fs.existsSync(configJsonPath)) {
     try {
       const data = JSON.parse(fs.readFileSync(configJsonPath, 'utf-8'));
-      // Assume AI provider configuration is stored under 'aiProvider' key in config.json
-      const aiConfig = data.aiProvider || {};
+      // Attempt to read AI provider configuration from various possible paths within the config file.
+      // This uses a priority list defined in AI_CONFIG_PATHS.
+      let aiConfig: Record<string, any> = {};
+      for (const configPath of AI_CONFIG_PATHS) {
+        const keys = configPath.split('.');
+        let value = data;
+        for (const key of keys) {
+          value = value?.[key];
+        }
+        if (value && typeof value === 'object') {
+          aiConfig = value;
+          break;
+        }
+      }
       if (aiConfig.apiKey) config.apiKey = aiConfig.apiKey;
       if (aiConfig.authToken) config.authToken = aiConfig.authToken;
       if (aiConfig.baseUrl) config.baseUrl = aiConfig.baseUrl;
