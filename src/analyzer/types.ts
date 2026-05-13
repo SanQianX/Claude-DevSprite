@@ -41,3 +41,8 @@ export interface AIAnalysisResult {
   tokensUsed: number;
   durationMs: number;
 }
+
+export interface AnalysisConfig {
+  maxRetries: number;
+  retryBaseDelayMs: number;
+}

@@ -3,7 +3,7 @@
  * Coordinates the full analysis flow
  */
 
-import type { AnalysisContext, AIAnalysisResult } from './types';
+import type { AnalysisContext, AIAnalysisResult, AnalysisConfig } from './types';
 import { DiffCollector } from './diffCollector';
 import { ContextBuilder } from './contextBuilder';
 import { ModeDecider } from './modeDecider';
@@ -20,6 +20,7 @@ export class AnalysisPipeline {
   private aiProvider: AIProvider;
   private responseParser: ResponseParser;
   private documentGenerator: DocumentGenerator;
+  private config: AnalysisConfig;
 
   constructor(repoPath: string, aiConfig?: { model?: string; apiKey?: string }) {
     this.diffCollector = new DiffCollector(repoPath);
@@ -29,6 +30,7 @@ export class AnalysisPipeline {
     this.aiProvider = new AIProvider(aiConfig);
     this.responseParser = new ResponseParser();
     this.documentGenerator = new DocumentGenerator();
+    this.config = { maxRetries: 3, retryBaseDelayMs: 500 };
   }
 
   /**
@@ -66,9 +68,29 @@ export class AnalysisPipeline {
       console.log('[AnalysisPipeline] Step 4: Generating prompt...');
       const prompt = this.promptBuilder.buildPrompt(context);
 
-      // 5. Call AI provider
+      // 5. Call AI provider with retry logic
       console.log('[AnalysisPipeline] Step 5: Calling AI provider...');
-      const aiResponse = await this.aiProvider.callAI(prompt);
+      let aiResponse;
+      let lastError: Error | undefined;
+      const { maxRetries, retryBaseDelayMs } = this.config;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          aiResponse = await this.aiProvider.callAI(prompt);
+          break; // Success, exit loop
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          if (attempt < maxRetries) {
+            const delay = retryBaseDelayMs * Math.pow(2, attempt);
+            console.warn(`[AnalysisPipeline] AI call failed (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${delay}ms...`, error);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            console.error(`[AnalysisPipeline] AI call failed after ${maxRetries + 1} attempts.`, error);
+          }
+        }
+      }
+      if (!aiResponse) {
+        throw lastError || new Error('AI call failed after all retries');
+      }
 
       // 6. Parse response
       console.log('[AnalysisPipeline] Step 6: Parsing AI response...');
@@ -101,8 +123,28 @@ export class AnalysisPipeline {
       // 4. Generate prompt
       const prompt = this.promptBuilder.buildPrompt(context);
 
-      // 5. Call AI provider
-      const aiResponse = await this.aiProvider.callAI(prompt);
+      // 5. Call AI provider with retry logic
+      let aiResponse;
+      let lastError: Error | undefined;
+      const { maxRetries, retryBaseDelayMs } = this.config;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          aiResponse = await this.aiProvider.callAI(prompt);
+          break; // Success, exit loop
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          if (attempt < maxRetries) {
+            const delay = retryBaseDelayMs * Math.pow(2, attempt);
+            console.warn(`[AnalysisPipeline] AI call failed (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${delay}ms...`, error);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            console.error(`[AnalysisPipeline] AI call failed after ${maxRetries + 1} attempts.`, error);
+          }
+        }
+      }
+      if (!aiResponse) {
+        throw lastError || new Error('AI call failed after all retries');
+      }
 
       // 6. Parse response
       const documents = this.documentGenerator.generateDocuments(aiResponse.content);

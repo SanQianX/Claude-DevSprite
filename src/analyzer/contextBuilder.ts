@@ -50,7 +50,9 @@ export class ContextBuilder {
    * Finds documents that reference changed files or are in related categories
    */
   async loadRelevantKnowledge(changedFiles: string[]): Promise<string[]> {
-    const knowledgePath = path.join(this.repoPath, config.knowledge.directoryName);
+    // Use project-level knowledge directory from config, with default 'knowledge'
+    const directoryName = config.knowledge.directoryName || 'knowledge';
+    const knowledgePath = path.join(this.repoPath, directoryName);
     if (!fs.existsSync(knowledgePath)) {
       return [];
     }

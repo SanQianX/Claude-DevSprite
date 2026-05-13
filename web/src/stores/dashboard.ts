@@ -69,6 +69,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       review.status = 'approved'
       review.resolved_at = new Date().toISOString()
     }
+    await fetchTasks(projectName)
   }
 
   async function fixReview(projectName: string, reviewId: number) {
@@ -79,6 +80,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
       review.status = result.action === 'confirmed' ? 'confirmed' : 'fixed'
       review.resolved_at = new Date().toISOString()
     }
+    // Refresh tasks to sync stats (review fix may create/update tasks)
+    await fetchTasks(projectName)
     return result
   }
 
@@ -91,6 +94,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   async function batchFixReviews(projectName: string, reviewIds?: number[]) {
     const result = await dashboardApi.batchFixReviews(projectName, reviewIds)
     await fetchReviews(projectName)
+    await fetchTasks(projectName)
     return result
   }
 
@@ -102,6 +106,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       review.status = 'ignored'
       review.resolved_at = new Date().toISOString()
     }
+    await fetchTasks(projectName)
   }
 
   async function fetchScannerConfig() {

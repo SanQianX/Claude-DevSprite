@@ -70,14 +70,14 @@
           <div class="section-title" style="margin-bottom:16px">进度统计</div>
           <div class="stats-center">
             <div class="stats-percent">{{ completionPercent }}%</div>
-            <div class="stats-sub">{{ completedCount }} / {{ tasks.length }} 完成</div>
+            <div class="stats-sub">{{ completedCount }} / {{ completedCount + inProgressCount + backlogCount }} 完成</div>
           </div>
           <div class="progress-bar">
             <div class="progress-fill" :style="{ width: completionPercent + '%' }"></div>
           </div>
           <div class="stats-detail">
-            <div>进行中: {{ inProgressCount }} 个任务</div>
-            <div>待开发: {{ backlogCount }} 个任务</div>
+            <div>进行中: {{ inProgressCount }} 项</div>
+            <div>待开发: {{ backlogCount }} 项</div>
           </div>
         </div>
       </div>
@@ -259,26 +259,51 @@ const taskGroups = reactive([
   {
     label: '进行中',
     expanded: true,
-    get tasks() { return tasks.value.filter(t => t.status === 'progress') },
+    get tasks() {
+      // Tasks in progress + pending/approved reviews (awaiting action)
+      const taskInProgress = tasks.value.filter(t => t.status === 'progress')
+      const reviewsInProgress = reviews.value.filter(r => r.status === 'pending' || r.status === 'approved')
+      return [...taskInProgress, ...reviewsInProgress]
+    },
   },
   {
     label: '已完成',
     expanded: true,
-    get tasks() { return tasks.value.filter(t => t.status === 'done') },
+    get tasks() {
+      // Completed tasks + fixed/confirmed reviews
+      const taskDone = tasks.value.filter(t => t.status === 'done')
+      const reviewsDone = reviews.value.filter(r => r.status === 'fixed' || r.status === 'confirmed')
+      return [...taskDone, ...reviewsDone]
+    },
   },
   {
     label: '待开发',
     expanded: true,
-    get tasks() { return tasks.value.filter(t => t.status === 'backlog') },
+    get tasks() {
+      // Backlog tasks + ignored reviews (deferred)
+      const taskBacklog = tasks.value.filter(t => t.status === 'backlog')
+      const reviewsIgnored = reviews.value.filter(r => r.status === 'ignored')
+      return [...taskBacklog, ...reviewsIgnored]
+    },
   },
 ])
 
-const completedCount = computed(() => tasks.value.filter(t => t.status === 'done').length)
-const inProgressCount = computed(() => tasks.value.filter(t => t.status === 'progress').length)
-const backlogCount = computed(() => tasks.value.filter(t => t.status === 'backlog').length)
-const completionPercent = computed(() =>
-  tasks.value.length > 0 ? Math.round((completedCount.value / tasks.value.length) * 100) : 0
+const completedCount = computed(() =>
+  tasks.value.filter(t => t.status === 'done').length +
+  reviews.value.filter(r => r.status === 'fixed' || r.status === 'confirmed').length
 )
+const inProgressCount = computed(() =>
+  tasks.value.filter(t => t.status === 'progress').length +
+  reviews.value.filter(r => r.status === 'pending' || r.status === 'approved').length
+)
+const backlogCount = computed(() =>
+  tasks.value.filter(t => t.status === 'backlog').length +
+  reviews.value.filter(r => r.status === 'ignored').length
+)
+const completionPercent = computed(() => {
+  const total = tasks.value.length + reviews.value.filter(r => r.status !== 'ignored').length
+  return total > 0 ? Math.round((completedCount.value / total) * 100) : 0
+})
 
 const reviews = computed(() => dashboardStore.reviews)
 
@@ -451,12 +476,21 @@ async function addTask() {
 }
 
 function getStatusColor(status: string): string {
-  if (status === 'done') return 'green'
-  if (status === 'progress') return 'blue'
+  if (status === 'done' || status === 'fixed' || status === 'confirmed') return 'green'
+  if (status === 'progress' || status === 'pending' || status === 'approved') return 'blue'
   return 'gray'
 }
 
-function getTaskMeta(task: Task): string {
+function getTaskMeta(task: any): string {
+  // Handle review items (have severity/category)
+  if (task.severity || task.category) {
+    const parts: string[] = []
+    if (task.severity) parts.push(task.severity)
+    if (task.category) parts.push(task.category)
+    if (task.source) parts.push(task.source)
+    return parts.join(' | ') || '审查项'
+  }
+  // Handle task items
   if (task.status === 'done' && task.completed_at) {
     return `完成于: ${new Date(task.completed_at).toLocaleDateString()}`
   }

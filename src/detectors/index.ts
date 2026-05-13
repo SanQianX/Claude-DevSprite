@@ -1,6 +1,12 @@
 /**
  * CommitDetectorManager
  * Manages multiple Git commit detection strategies with fallback
+ * 
+ * Detection Strategy Fallback Mechanism:
+ * - Primary: Git Hook (post-commit hook) - triggered automatically after commits
+ * - Secondary: .git directory watcher (dotGitWatcher) - monitors .git directory for changes
+ * - Tertiary: Reflog poller (reflogPoller) - polls reflog for new commits at intervals
+ * This strategy ensures commit detection is reliable across different Git setups.
  */
 
 import type { CommitEvent, Detector } from './types';

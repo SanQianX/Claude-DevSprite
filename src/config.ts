@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as os from 'os';
 
+/** Configuration for project discovery. */
 export interface ProjectDiscoveryConfig {
   /** Directories to scan for projects */
   scanPaths: string[];
@@ -14,54 +15,90 @@ export interface ProjectDiscoveryConfig {
   maxDepth: number;
 }
 
+/** Configuration for the server. */
 export interface ServerConfig {
+  /** Port to listen on */
   port: number;
+  /** Host to bind to */
   host: string;
 }
 
+/** Configuration for the knowledge base. */
 export interface KnowledgeConfig {
+  /** Name of the knowledge directory within projects */
   directoryName: string;
+  /** Whether to auto-commit knowledge updates */
   autoCommit: boolean;
+  /** Template for auto-commit messages */
   commitMessageTemplate: string;
 }
 
+/** Configuration for analysis processes. */
 export interface AnalysisConfig {
+  /** Analysis mode: incremental or full */
   mode: 'incremental' | 'full';
+  /** Interval in days for full analysis */
   fullAnalysisIntervalDays: number;
+  /** Triggers for full analysis */
   fullAnalysisTriggers: {
+    /** Threshold of new files to trigger full analysis */
     newFilesThreshold: number;
+    /** File patterns for dependency files */
     dependencyFilePatterns: string[];
+    /** Keywords in commit messages to trigger full analysis */
     commitMessageKeywords: string[];
   };
+  /** Maximum tokens for diff analysis */
   diffMaxTokens: number;
+  /** Maximum retries for analysis operations */
   maxRetries: number;
+  /** Base delay in milliseconds for retries */
   retryBaseDelayMs: number;
 }
 
+/** Configuration for detection strategies. */
 export interface DetectionConfig {
+  /** Preferred detection strategy */
   preferredStrategy: 'hook' | 'watcher' | 'poller';
+  /** Fallback strategies in order of preference */
   fallbackStrategies: Array<'hook' | 'watcher' | 'poller'>;
+  /** Interval in milliseconds for poller strategy */
   pollerIntervalMs: number;
+  /** Deduplication window in milliseconds */
   dedupWindowMs: number;
 }
 
+/** Configuration for web interface. */
 export interface WebConfig {
+  /** Whether web interface is enabled */
   enabled: boolean;
+  /** Whether to auto-open web interface on startup */
   autoOpen: boolean;
 }
 
+/** Configuration for logging. */
 export interface LoggingConfig {
+  /** Logging level */
   level: 'debug' | 'info' | 'warn' | 'error';
+  /** Optional log file path */
   file?: string;
 }
 
+/** Main configuration interface for the system, stored in config.json. */
 export interface Config {
+  /** Server configuration */
   server: ServerConfig;
+  /** Knowledge base configuration */
   knowledge: KnowledgeConfig;
+  /** Analysis configuration */
   analysis: AnalysisConfig;
+  /** Detection strategy configuration */
   detection: DetectionConfig;
+  /** Web interface configuration */
   web: WebConfig;
+  /** Logging configuration */
   logging: LoggingConfig;
+  /** Project discovery configuration */
   projectDiscovery: ProjectDiscoveryConfig;
 }
 
@@ -128,8 +165,24 @@ const getDefaultConfig = (): Config => ({
   },
 });
 
-// Default configuration
-export const config: Config = getDefaultConfig();
+// Deep merge utility to combine configuration objects
+function deepMerge(target: any, source: any): any {
+  const result = { ...target };
+  for (const key in source) {
+    if (source.hasOwnProperty(key)) {
+      if (
+        typeof source[key] === 'object' &&
+        source[key] !== null &&
+        !Array.isArray(source[key])
+      ) {
+        result[key] = deepMerge(target[key] || {}, source[key]);
+      } else {
+        result[key] = source[key];
+      }
+    }
+  }
+  return result;
+}
 
 // Base directory for DevSprite system data
 const baseDataDir: string = path.join(os.homedir(), '.claude-dev-sprite', 'data');
@@ -138,8 +191,10 @@ const baseDataDir: string = path.join(os.homedir(), '.claude-dev-sprite', 'data'
 export const dbPath: string = path.join(baseDataDir, 'dev-sprite.db');
 
 // Configuration file path for system-level settings (JSON)
-// Updated to match actual implementation as per review: ~/.claude/claude-dev-sprite/data/config.json
-export const configFile: string = path.join(os.homedir(), '.claude', 'claude-dev-sprite', 'data', 'config.json');
+// IMPORTANT: All references to the config file path must use the same string for consistency.
+// The canonical path is: ~/.claude-dev-sprite/config.json
+// This is defined here and should be imported from this module when needed.
+export const configFile: string = path.join(os.homedir(), '.claude-dev-sprite', 'config.json');
 
 // Ensure data directory exists
 try {
@@ -150,3 +205,24 @@ try {
 } catch (error) {
   // Ignore errors during initialization
 }
+
+// Load configuration with priority: Environment variables > Config file > Default values
+// 1. Start with default configuration (which includes environment variables)
+const defaultConfig = getDefaultConfig();
+
+// 2. Attempt to load configuration from config file and merge with defaults
+let fileConfig: Partial<Config> = {};
+try {
+  const fs = require('fs');
+  if (fs.existsSync(configFile)) {
+    const configData = fs.readFileSync(configFile, 'utf-8');
+    fileConfig = JSON.parse(configData);
+  }
+} catch (error) {
+  // If file reading fails, use empty config to fall back to defaults
+  // Optional: log error for debugging, but do not throw to avoid breaking startup
+  console.warn(`Failed to load config file ${configFile}: ${error}. Using defaults.`);
+}
+
+// 3. Merge configuration: default config as base, file config overrides
+export const config: Config = deepMerge(defaultConfig, fileConfig);

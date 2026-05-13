@@ -4,6 +4,10 @@
  * 该模块提供了用于检测 Git 事件（如提交）的检测器工厂。它实现了三种检测策略及其自动回退机制，
  * 确保了在不同环境和权限下都能可靠地捕获提交事件，并将事件流集成到核心分析流水线中。
  *
+ * ## 模块在架构中的位置与角色
+ * 本模块属于项目功能架构的 **事件源 (Event Sources)** 层，是 **提交检测 (Detectors)** 子系统的核心实现。
+ * 它为整个分析流水线提供标准化、可靠的 Git 提交事件流，是触发后续所有分析步骤的起点。
+ *
  * ## 检测策略
  * 1.  **PostCommitHookDetector (首选策略)**: 通过在目标仓库 `.git/hooks` 目录下安装一个 `post-commit` 钩子脚本来工作。当有提交发生时，钩子脚本会立即触发。
  * 2.  **DotGitWatcherDetector (第二策略)**: 使用文件系统监听器（如 `fs.watch` 或 `chokidar`）监控 `.git/` 目录下的特定文件变化（如 `COMMIT_EDITMSG`, `HEAD`）。这是一种异步的文件级监听。
@@ -14,10 +18,17 @@
  * 如果策略因环境不支持（例如，用户没有写入 `.git/hooks` 的权限）或依赖缺失而失败，则会自动回退到下一种策略。
  * 如果所有高级策略均失败，则默认使用 `ReflogPollerDetector`。
  *
+ * ## 配置选项
+ * - **DetectorType**: 可通过 `createDetector` 函数显式指定检测策略类型，支持 'post-commit-hook', 'dotgit-watcher', 'reflog-poller'。
+ * - **回退策略配置**: `createDetectorWithFallback` 使用固定的回退顺序（Hook -> Watcher -> Poller），当前未提供配置接口，但设计上可扩展。
+ * - **轮询间隔**: `ReflogPollerDetector` 在回退策略中使用固定间隔（1秒），未来可考虑作为配置参数。
+ *
  * ## 与核心分析流水线的集成
  * 创建出的 `Detector` 实例实现了标准的 `Detector` 接口，提供 `start()`, `stop()` 和 `onCommit` 事件。
  * 核心流水线只需调用 `createDetectorWithFallback` 并订阅返回的 `detector.onCommit` 事件，即可获得标准化的提交事件流，无需关心底层的具体检测机制。
  * 这种解耦设计使得事件源可以灵活切换和回退，而不影响流水线的其他部分。
+ *
+ * @see FUNCTIONAL-LOGIC-ANALYSIS.md - 项目功能架构图与模块清单（应包含'提交检测 (Detectors)'模块详细描述，包括本模块所述内容）。
  */
 
 import type { Detector, DetectorType } from './types';

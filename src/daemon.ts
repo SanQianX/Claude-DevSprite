@@ -2,7 +2,7 @@
  * Claude-DevSprite Daemon Manager (TypeScript)
  * Manages the worker process as a detached background daemon.
  *
- * PID files and logs are stored in ~/.claude/claude-dev-sprite/
+ * PID files and logs are stored in ~/.claude-dev-sprite/
  * so that the global CLI works correctly from any directory.
  */
 
@@ -18,7 +18,7 @@ const PACKAGE_ROOT = path.resolve(__dirname, '..');
 const ENTRY_POINT = path.join(PACKAGE_ROOT, 'dist', 'worker', 'index.js');
 
 // Store PID/logs in user home so global install works
-const DATA_DIR = path.join(os.homedir(), '.claude', 'claude-dev-sprite');
+const DATA_DIR = path.join(os.homedir(), '.claude-dev-sprite');
 const PID_FILE = path.join(DATA_DIR, 'daemon.pid');
 const LOG_DIR = path.join(DATA_DIR, 'logs');
 const STDOUT_LOG = path.join(LOG_DIR, 'worker-stdout.log');
