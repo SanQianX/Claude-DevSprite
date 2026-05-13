@@ -39,6 +39,16 @@ export class DesignFixer {
     };
   }
 
+  /**
+   * Update the fixer configuration at runtime.
+   * This method allows dynamic adjustment of the fixer's behavior without restarting the service.
+   * When enabled, the fixer will automatically start; when disabled, it will stop.
+   * The interval can be updated if it meets the minimum requirement (60000ms).
+   *
+   * @param config - Configuration options to update
+   * @param config.enabled - Whether to enable or disable the fixer (optional)
+   * @param config.intervalMs - The interval in milliseconds between fix attempts (optional, minimum 60000ms)
+   */
   updateFixerConfig(config: { enabled?: boolean; intervalMs?: number }): void {
     if (config.enabled !== undefined) {
       this.enabled = config.enabled;
