@@ -1,7 +1,19 @@
 /**
  * Design Scanner Agent
- * Scans code against design docs and knowledge base to find inconsistencies.
- * This agent ONLY scans — it does not fix or commit.
+ * 
+ * 独立的设计扫描器模块，用于扫描代码与设计文档的一致性。
+ * 与 CodeReviewer 扫描器的区别：DesignScanner 仅扫描并报告不一致，不进行修复或提交。
+ * 它定期扫描项目中的设计文档（如 FUNCTIONAL-LOGIC-ANALYSIS.md）和知识库，
+ * 并与实际代码进行比较，找出缺失实现、死代码、逻辑不匹配等问题。
+ * 
+ * 配置方式：通过构造函数传入模型和扫描间隔，或使用 updateConfig 方法动态调整。
+ * 扫描结果存储在数据库中，由其他模块（如 DesignFixer）处理修复。
+ * 
+ * 职责：
+ * - 扫描设计文档和知识库
+ * - 比较代码与文档的一致性
+ * - 报告发现的问题
+ * - 不自动修复或提交
  */
 
 import * as fs from 'fs';
@@ -30,7 +42,7 @@ export interface DesignCheckResult {
   modelUsed: string;
 }
 
-const DESIGN_CHECK_PROMPT = `你是一个功能一致性检查专家。请比较"设计文档"和"实际代码"，找出不一致。
+const DESIGN_CHECK_PROMPT = `你是一个功能一致性检查专家。请比较“设计文档”和“实际代码”，找出不一致。
 
 ## 项目: {{projectName}}
 
@@ -69,8 +81,8 @@ const DESIGN_CHECK_PROMPT = `你是一个功能一致性检查专家。请比较
 }
 
 【重要】file 字段要求：
-- file 必须是上面"实际代码"部分中出现的一个源代码文件路径（如 src/analyzer/aiProvider.ts）
-- file 必须指向需要修改的源代码文件，不能是"设计文档"、"知识库"等文档名称
+- file 必须是上面“实际代码”部分中出现的一个源代码文件路径（如 src/analyzer/aiProvider.ts）
+- file 必须指向需要修改的源代码文件，不能是“设计文档”、“知识库”等文档名称
 - 如果问题涉及多个文件，选择最相关的那个
 - 如果问题纯属设计层面、没有对应的代码文件可修改，将 file 设为空字符串 ""
 
@@ -92,6 +104,16 @@ export interface ScannerConfig {
   isScanning: boolean;
 }
 
+/**
+ * DesignScanner 类
+ * 
+ * 独立的设计扫描器，负责扫描代码与设计文档的一致性。
+ * 与 DesignChecker（向后兼容导出）不同，DesignScanner 提供更灵活的配置和独立扫描逻辑。
+ * 
+ * 使用示例：
+ * const scanner = new DesignScanner({ model: 'gpt-4', scanIntervalMs: 300000 });
+ * scanner.startScanner();
+ */
 export class DesignScanner {
   private aiProvider: AIProvider;
   private scanIntervalMs: number;
@@ -99,11 +121,19 @@ export class DesignScanner {
   private isScanning = false;
   private enabled = true;
 
+  /**
+   * 创建 DesignScanner 实例
+   * @param options - 可选配置：model（AI模型）、scanIntervalMs（扫描间隔毫秒）、agentConfig（AI配置）
+   */
   constructor(options?: { model?: string; scanIntervalMs?: number; agentConfig?: AIConfig }) {
     this.aiProvider = new AIProvider({ model: options?.model, agentConfig: options?.agentConfig });
     this.scanIntervalMs = options?.scanIntervalMs ?? 10 * 60 * 1000; // 10 minutes default
   }
 
+  /**
+   * 获取当前扫描器配置
+   * @returns ScannerConfig 对象，包含启用状态、扫描间隔和是否正在扫描
+   */
   getConfig(): ScannerConfig {
     return {
       enabled: this.enabled,
@@ -112,6 +142,10 @@ export class DesignScanner {
     };
   }
 
+  /**
+   * 更新扫描器配置
+   * @param config - 配置对象：enabled（启用状态）、intervalMs（扫描间隔，最小60秒）
+   */
   updateConfig(config: { enabled?: boolean; intervalMs?: number }): void {
     if (config.enabled !== undefined) {
       this.enabled = config.enabled;
@@ -127,6 +161,10 @@ export class DesignScanner {
     logger.info(`[DesignScanner] Config updated: enabled=${this.enabled}, interval=${this.scanIntervalMs}ms`);
   }
 
+  /**
+   * 启动后台扫描器
+   * 会在指定间隔后自动扫描所有项目，并延迟30秒执行首次扫描
+   */
   startScanner(): void {
     if (this.scanTimer) return;
     if (!this.enabled) {
@@ -139,6 +177,9 @@ export class DesignScanner {
     setTimeout(() => this.scanAllProjects(), 30000);
   }
 
+  /**
+   * 停止后台扫描器
+   */
   stopScanner(): void {
     if (this.scanTimer) {
       clearInterval(this.scanTimer);
@@ -147,6 +188,10 @@ export class DesignScanner {
     }
   }
 
+  /**
+   * 扫描所有项目
+   * 从数据库获取项目列表，并逐个扫描
+   */
   async scanAllProjects(): Promise<void> {
     if (this.isScanning) {
       logger.info('[DesignScanner] Scan already in progress, skipping');
@@ -170,6 +215,13 @@ export class DesignScanner {
     }
   }
 
+  /**
+   * 扫描单个项目
+   * @param projectId - 项目ID
+   * @param projectPath - 项目路径
+   * @param projectName - 项目名称
+   * @returns 发现的问题数量
+   */
   async scanProject(projectId: string, projectPath: string, projectName: string): Promise<number> {
     logger.info(`[DesignScanner] Scanning project "${projectName}"`);
 
@@ -257,6 +309,12 @@ export class DesignScanner {
     return result.findings.length;
   }
 
+  /**
+   * 收集设计文档
+   * 从项目根目录的 tasks/ 子目录中读取指定的设计文档文件
+   * @param projectPath - 项目路径
+   * @returns 设计文档数组，每项包含文件名和内容
+   */
   private collectDesignDocs(projectPath: string): Array<{ name: string; content: string }> {
     const tasksDir = path.join(projectPath, 'tasks');
     const docs: Array<{ name: string; content: string }> = [];
@@ -284,6 +342,13 @@ export class DesignScanner {
     return docs;
   }
 
+  /**
+   * 收集知识库文档
+   * 从知识库管理器中获取文档列表，最多返回10个
+   * @param projectPath - 项目路径
+   * @param projectId - 项目ID
+   * @returns 知识库文档数组
+   */
   private async collectKnowledgeDocs(
     projectPath: string,
     projectId: string
@@ -307,6 +372,12 @@ export class DesignScanner {
     }
   }
 
+  /**
+   * 收集关键源代码文件
+   * 递归扫描 src/ 和 web/src/ 目录，收集代码文件，受限于最大数量和总大小
+   * @param projectPath - 项目路径
+   * @returns 源文件数组，每项包含相对路径、内容和语言
+   */
   private collectKeySourceFiles(projectPath: string): Array<{ relativePath: string; content: string; lang: string }> {
     const files: Array<{ relativePath: string; content: string; lang: string }> = [];
     let totalSize = 0;
@@ -362,6 +433,13 @@ export class DesignScanner {
     return files;
   }
 
+  /**
+   * 解析 AI 响应
+   * 从 JSON 字符串中提取发现的问题列表
+   * @param response - AI 响应对象，包含 content 字符串
+   * @param filesReviewed - 已审查的文件数量
+   * @returns DesignCheckResult 对象
+   */
   private parseResponse(response: { content: string }, filesReviewed: number): DesignCheckResult {
     try {
       const jsonMatch = response.content.match(/\{[\s\S]*\}/);
@@ -405,6 +483,15 @@ export class DesignScanner {
     }
   }
 
+  /**
+   * 推断文件路径
+   * 当 AI 返回无效文件路径时，尝试根据标题和描述推断正确的文件路径
+   * @param invalidPath - 无效的文件路径
+   * @param title - 问题标题
+   * @param description - 问题描述
+   * @param sourceFiles - 源文件列表
+   * @returns 推断出的相对路径，或 null
+   */
   private inferFilePath(
     invalidPath: string,
     title: string,
