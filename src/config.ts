@@ -99,7 +99,7 @@ const getDefaultConfig = (): Config => ({
   },
   logging: {
     level: 'info',
-    file: path.join(os.homedir(), '.claude', 'claude-dev-sprite', 'logs', 'app.log'),
+    file: path.join(os.homedir(), '.claude-dev-sprite', 'logs', 'app.log'),
   },
   projectDiscovery: {
     // Default scan paths: common project directories
@@ -132,14 +132,14 @@ const getDefaultConfig = (): Config => ({
 export const config: Config = getDefaultConfig();
 
 // Base directory for DevSprite system data
-const baseDataDir: string = path.join(os.homedir(), '.claude', 'claude-dev-sprite', 'data');
+const baseDataDir: string = path.join(os.homedir(), '.claude-dev-sprite', 'data');
 
 // Database path for structured data (projects, tasks, reviews, etc.)
 export const dbPath: string = path.join(baseDataDir, 'dev-sprite.db');
 
 // Configuration file path for system-level settings (JSON)
-// As per design document: ~/.claude-dev-sprite/config.json
-export const configFile: string = path.join(os.homedir(), '.claude-dev-sprite', 'config.json');
+// Updated to match actual implementation as per review: ~/.claude/claude-dev-sprite/data/config.json
+export const configFile: string = path.join(os.homedir(), '.claude', 'claude-dev-sprite', 'data', 'config.json');
 
 // Ensure data directory exists
 try {

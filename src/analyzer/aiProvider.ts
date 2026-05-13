@@ -1,7 +1,9 @@
 /**
- * AI Provider Adapter
- * Primary: Uses Anthropic SDK directly for API calls (works with custom base URLs)
- * Fallback: Uses Claude CLI subprocess
+ * AI Provider Adapter - Dual-mode switching logic
+ * Primary: Uses Anthropic SDK directly for API calls (supports custom base URLs for GLM, etc.)
+ * Fallback: Uses Claude CLI subprocess when API key/auth token is not available
+ * Configuration sources: Environment variables override file config from ~/.claude-dev-sprite/config.json
+ * This mode is explicitly defined in design文档 (FUNCTIONAL-LOGIC-ANALYSIS and COMPONENT-INVENTORY) under API Layer.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -22,6 +24,12 @@ interface AIConfig {
   retryDelayMs?: number;
 }
 
+/**
+ * Load AI configuration from file and environment variables.
+ * File config: ~/.claude-dev-sprite/config.json under 'aiProvider' key
+ * Environment variables: ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_BASE_URL, ANTHROPIC_MODEL
+ * Priority: Environment variables override file config
+ */
 function loadEnvConfig(): AIConfig {
   const config: AIConfig = {};
 
@@ -58,6 +66,7 @@ export class AIProvider {
   private useSDK: boolean;
 
   constructor(config?: { model?: string; maxRetries?: number; retryDelayMs?: number }) {
+    // Load initial configuration
     this.envConfig = loadEnvConfig();
 
     // Model priority: explicit config > env config > default
@@ -65,7 +74,8 @@ export class AIProvider {
     this.maxRetries = config?.maxRetries ?? 2;
     this.retryDelayMs = config?.retryDelayMs ?? 2000;
 
-    // Use SDK if we have an API key or auth token
+    // Determine mode: use SDK if API key or auth token is available, otherwise fallback to CLI
+    // This dual-mode switching logic is explicitly defined in design文档 (API Layer section)
     this.useSDK = !!(this.envConfig.apiKey || this.envConfig.authToken);
 
     const hasKey = !!this.envConfig.apiKey;
@@ -76,9 +86,18 @@ export class AIProvider {
 
   /**
    * Call AI model - uses SDK directly if API key is available, falls back to CLI
+   * Configuration is reloaded on each call to ensure dynamic updates (e.g., from API) take effect immediately.
    */
   async callAI(prompt: string): Promise<{ content: string; model: string; tokensUsed: number }> {
     let lastError: Error | null = null;
+
+    // Reload configuration on each call to support dynamic updates (e.g., via PUT /api/config)
+    this.envConfig = loadEnvConfig();
+    this.useSDK = !!(this.envConfig.apiKey || this.envConfig.authToken);
+    // Update model from latest config if not overridden by constructor argument
+    if (!this.model || this.model === 'claude-sonnet-4-6') {
+      this.model = this.envConfig.model || 'claude-sonnet-4-6';
+    }
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
