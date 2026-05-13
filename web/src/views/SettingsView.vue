@@ -22,8 +22,13 @@
       <div v-if="activeTab === 'ai'" class="tab-panel">
         <div class="section">
           <h3 class="section-title">Shared Configuration</h3>
-          <p class="section-desc">Base AI settings shared by both scanner and fixer agents.</p>
+          <p class="section-desc">Base AI settings shared by both scanner and fixer agents. Agents inherit these unless overridden per-agent below.</p>
 
+          <div class="form-group">
+            <label class="form-label">Default Model</label>
+            <input v-model="aiConfig.model" class="form-input" placeholder="e.g. claude-sonnet-4-6" />
+            <span class="form-hint">Default model for all agents. Overridden by per-agent model settings.</span>
+          </div>
           <div class="form-group">
             <label class="form-label">Base URL</label>
             <input v-model="aiConfig.baseUrl" class="form-input" placeholder="https://api.anthropic.com" />
@@ -56,8 +61,8 @@
 
           <div class="form-group">
             <label class="form-label">Scanner Model</label>
-            <input v-model="aiConfig.scannerModel" class="form-input" placeholder="e.g. claude-sonnet-4-6" />
-            <span class="form-hint">Leave empty to use the default model above</span>
+            <input v-model="aiConfig.scannerModel" class="form-input" placeholder="Leave empty to use default model" />
+            <span class="form-hint">Override the shared default model for scanner only</span>
           </div>
           <div class="form-group">
             <label class="form-label">Scanner API Key</label>
@@ -95,8 +100,8 @@
 
           <div class="form-group">
             <label class="form-label">Fixer Model</label>
-            <input v-model="aiConfig.fixerModel" class="form-input" placeholder="e.g. claude-haiku-4-5-20251001" />
-            <span class="form-hint">Leave empty to use the default model above</span>
+            <input v-model="aiConfig.fixerModel" class="form-input" placeholder="Leave empty to use default model" />
+            <span class="form-hint">Override the shared default model for fixer only</span>
           </div>
           <div class="form-group">
             <label class="form-label">Fixer API Key</label>
