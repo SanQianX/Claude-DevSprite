@@ -1,11 +1,15 @@
 /**
  * Design Consistency Checker — Backward-compatible re-export
  *
- * The original DesignChecker has been split into two agents:
- * - DesignScanner: scans code against design docs, writes findings to reviews table
- * - DesignFixer: reads pending reviews, fixes via AI, git commits
+ * This module provides backward compatibility for the original DesignChecker API.
+ * The actual implementation has been refactored into:
+ * - DesignScanner (in designScanner.ts): responsible for scanning code against design docs
+ * - DesignFixer: handles fixing and committing (not exported here)
  *
- * This file re-exports DesignScanner as DesignChecker for backward compatibility.
+ * For detailed functionality, refer to the DesignScanner class in designScanner.ts.
+ * 
+ * Note: The design documentation (FUNCTIONAL-LOGIC-ANALYSIS.md) should be updated
+ * to reflect this new module organization, where DesignChecker acts as a wrapper.
  */
 
 export { DesignScanner as DesignChecker } from './designScanner';
