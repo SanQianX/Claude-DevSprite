@@ -307,6 +307,13 @@ export function registerConfigRoutes(app: Express): void {
         scanner: aiConfig.scanner,
         fixer: aiConfig.fixer,
       },
+      sync: {
+        enabled: config.sync.enabled,
+        serverUrl: config.sync.serverUrl || override.sync?.serverUrl || '',
+        syncIntervalMs: config.sync.syncIntervalMs || override.sync?.syncIntervalMs || 30000,
+        jwtSecret: override.sync?.jwtSecret ? '****' : '',
+        agentToken: override.sync?.agentToken ? '****' : '',
+      },
       dbPath: dbPath.replace(process.env.HOME || process.env.USERPROFILE || '', '~'),
     };
 
@@ -449,6 +456,36 @@ export function registerConfigRoutes(app: Express): void {
         success: false,
         message,
       });
+    }
+  });
+
+  /**
+   * POST /api/config/sync
+   * Save remote sync configuration
+   */
+  app.post('/api/config/sync', (req: Request, res: Response) => {
+    try {
+      const { enabled, serverUrl, syncIntervalMs, jwtSecret, agentToken } = req.body;
+      const current = loadConfigOverride();
+
+      if (!current.sync) current.sync = {};
+      if (enabled !== undefined) current.sync.enabled = !!enabled;
+      if (serverUrl !== undefined) current.sync.serverUrl = serverUrl;
+      if (syncIntervalMs !== undefined) current.sync.syncIntervalMs = Math.max(5000, Number(syncIntervalMs) || 30000);
+      // Only update jwtSecret/agentToken if not masked
+      if (jwtSecret !== undefined && jwtSecret !== '****') current.sync.jwtSecret = jwtSecret;
+      if (agentToken !== undefined && agentToken !== '****') current.sync.agentToken = agentToken;
+
+      saveConfigOverride(current);
+
+      logger.info(`Sync config saved: enabled=${current.sync.enabled}, serverUrl=${current.sync.serverUrl}`);
+      res.json({
+        status: 'ok',
+        message: 'Sync configuration saved. Restart required for changes to take effect.',
+      });
+    } catch (error) {
+      logger.error('Error saving sync configuration', error);
+      res.status(500).json({ status: 'error', message: 'Failed to save sync configuration' });
     }
   });
 

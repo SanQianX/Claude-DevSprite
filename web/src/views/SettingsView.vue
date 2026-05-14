@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-page">
+  <div class="settings-page" data-testid="settings-page">
     <AppHeader />
 
     <div class="settings-content">
@@ -14,13 +14,14 @@
           :key="tab.key"
           class="tab-btn"
           :class="{ active: activeTab === tab.key }"
+          :data-testid="`tab-${tab.key === 'ai' ? 'ai-model' : tab.key === 'teams' ? 'agent-teams' : tab.key === 'skills' ? 'skills' : tab.key === 'sync' ? 'remote-sync' : 'system'}`"
           @click="activeTab = tab.key"
         >{{ tab.label }}</button>
       </div>
 
       <!-- AI Model Config -->
-      <div v-if="activeTab === 'ai'" class="tab-panel">
-        <div class="section">
+      <div v-if="activeTab === 'ai'" class="tab-panel" data-testid="tab-ai-model-panel">
+        <div class="section" data-testid="section-ai-provider-config">
           <h3 class="section-title">Shared Configuration</h3>
           <p class="section-desc">Base AI settings shared by both scanner and fixer agents. Agents inherit these unless overridden per-agent below.</p>
 
@@ -147,9 +148,9 @@
       </div>
 
       <!-- Agent Teams Config -->
-      <div v-if="activeTab === 'teams'" class="tab-panel">
-        <div class="section">
-          <h3 class="section-title">Agent Teams</h3>
+      <div v-if="activeTab === 'teams'" class="tab-panel" data-testid="tab-agent-teams-panel">
+        <div class="section" data-testid="section-agent-teams">
+          <h3 class="section-title" data-testid="heading-agent-teams">Agent Teams</h3>
           <p class="section-desc">Configure the Lead, Dev, and Test agent teams.</p>
 
           <div v-if="teamsLoading" class="loading-text">Loading teams...</div>
@@ -217,8 +218,8 @@
       </div>
 
       <!-- Skills Config -->
-      <div v-if="activeTab === 'skills'" class="tab-panel">
-        <div class="section">
+      <div v-if="activeTab === 'skills'" class="tab-panel" data-testid="tab-skills-panel">
+        <div class="section" data-testid="section-installed-skills">
           <h3 class="section-title">Installed Skills</h3>
           <p class="section-desc">Skills are capabilities that can be assigned to agent teams.</p>
 
@@ -250,9 +251,121 @@
         </div>
       </div>
 
-      <!-- System Config -->
-      <div v-if="activeTab === 'system'" class="tab-panel">
+      <!-- Remote Sync Config -->
+      <div v-if="activeTab === 'sync'" class="tab-panel" data-testid="tab-remote-sync">
         <div class="section">
+          <h3 class="section-title">Remote Sync</h3>
+          <p class="section-desc">
+            Enable remote access to control your local development machine from any browser.
+            When enabled, a local Agent connects to a cloud server, and you can view/control
+            your machine from anywhere.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label">Enable Remote Sync</label>
+            <label class="toggle-label">
+              <input type="checkbox" v-model="syncConfig.enabled" data-testid="sync-enabled" />
+              <span>Enable remote sync mode</span>
+            </label>
+            <span class="form-hint">
+              When enabled, the system requires a cloud server and Agent connection.
+              Restart is required after changing this.
+            </span>
+          </div>
+
+          <div v-if="syncConfig.enabled" class="sync-details">
+            <div class="form-group">
+              <label class="form-label">Server URL</label>
+              <input
+                v-model="syncConfig.serverUrl"
+                class="form-input"
+                placeholder="wss://your-server.com:38888"
+                data-testid="sync-server-url"
+              />
+              <span class="form-hint">
+                WebSocket URL of the cloud server (e.g. wss://sync.example.com:38888)
+              </span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Sync Interval (ms)</label>
+              <input
+                v-model.number="syncConfig.syncIntervalMs"
+                class="form-input"
+                type="number"
+                min="5000"
+                step="5000"
+                data-testid="sync-interval"
+              />
+              <span class="form-hint">How often to sync state to server (default: 30000ms = 30s)</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">JWT Secret</label>
+              <div class="input-with-btn">
+                <input
+                  v-model="syncConfig.jwtSecret"
+                  class="form-input"
+                  :type="showJwtSecret ? 'text' : 'password'"
+                  placeholder="Click Generate to create a secret"
+                  data-testid="sync-jwt-secret"
+                />
+                <button class="btn-sm" @click="showJwtSecret = !showJwtSecret">
+                  {{ showJwtSecret ? 'Hide' : 'Show' }}
+                </button>
+                <button class="btn-sm" @click="generateJwtSecret" data-testid="sync-generate-jwt">
+                  Generate
+                </button>
+              </div>
+              <span class="form-hint">Secret key for JWT token signing (server and agent must use the same secret)</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Agent Token</label>
+              <div class="input-with-btn">
+                <input
+                  v-model="syncConfig.agentToken"
+                  class="form-input"
+                  :type="showAgentToken ? 'text' : 'password'"
+                  placeholder="Click Generate to create a token"
+                  data-testid="sync-agent-token"
+                />
+                <button class="btn-sm" @click="showAgentToken = !showAgentToken">
+                  {{ showAgentToken ? 'Hide' : 'Show' }}
+                </button>
+                <button class="btn-sm" @click="generateAgentToken" data-testid="sync-generate-token">
+                  Generate
+                </button>
+              </div>
+              <span class="form-hint">Authentication token for the local Agent to connect to the server</span>
+            </div>
+
+            <div class="info-box">
+              <h4>How it works</h4>
+              <ol>
+                <li>Configure a cloud server with Claude-DevSprite running in server mode</li>
+                <li>Set the Server URL to point to your cloud server</li>
+                <li>Generate and copy the JWT Secret and Agent Token</li>
+                <li>Start the local Agent: <code>claude-dev-sprite agent --server &lt;url&gt; --token &lt;token&gt;</code></li>
+                <li>Open the web UI on any device and log in</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn-primary" @click="saveSyncConfig" :disabled="syncSaving" data-testid="sync-save">
+              {{ syncSaving ? 'Saving...' : 'Save Sync Config' }}
+            </button>
+          </div>
+          <div v-if="syncResult" class="test-result" :class="syncResult.success ? 'success' : 'error'" data-testid="sync-result">
+            {{ syncResult.message }}
+          </div>
+        </div>
+      </div>
+
+      <!-- System Config -->
+      <div v-if="activeTab === 'system'" class="tab-panel" data-testid="tab-system-panel">
+        <div class="section" data-testid="section-system-config">
           <h3 class="section-title">System Configuration</h3>
           <p class="section-desc">General system settings. Some changes require a restart.</p>
 
@@ -323,13 +436,14 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
-import { configApi, type SystemConfig } from '@/api/config'
+import { configApi, type SystemConfig, type SyncConfigPayload } from '@/api/config'
 import { teamsApi, type TeamConfig } from '@/api/teams'
 
 const tabs = [
   { key: 'ai', label: 'AI Model' },
   { key: 'teams', label: 'Agent Teams' },
   { key: 'skills', label: 'Skills' },
+  { key: 'sync', label: 'Remote Sync' },
   { key: 'system', label: 'System' },
 ]
 
@@ -380,6 +494,19 @@ const systemConfig = reactive({
   detectionStrategy: 'hook',
 })
 
+// Remote Sync
+const syncConfig = reactive({
+  enabled: false,
+  serverUrl: '',
+  syncIntervalMs: 30000,
+  jwtSecret: '',
+  agentToken: '',
+})
+const showJwtSecret = ref(false)
+const showAgentToken = ref(false)
+const syncSaving = ref(false)
+const syncResult = ref<{ success: boolean; message: string } | null>(null)
+
 onMounted(async () => {
   await Promise.all([loadConfig(), loadTeams()])
 })
@@ -406,6 +533,12 @@ async function loadConfig() {
     aiConfig.scannerBaseUrl = cfg.ai?.scanner?.baseUrl || ''
     aiConfig.fixerApiKey = cfg.ai?.fixer?.maskedApiKey || ''
     aiConfig.fixerBaseUrl = cfg.ai?.fixer?.baseUrl || ''
+    // Sync config
+    syncConfig.enabled = cfg.sync?.enabled ?? false
+    syncConfig.serverUrl = cfg.sync?.serverUrl || ''
+    syncConfig.syncIntervalMs = cfg.sync?.syncIntervalMs || 30000
+    syncConfig.jwtSecret = cfg.sync?.jwtSecret || ''
+    syncConfig.agentToken = cfg.sync?.agentToken || ''
   } catch (e: any) {
     console.error('Failed to load config:', e)
   }
@@ -582,6 +715,44 @@ async function testSkill(name: string) {
   } finally {
     skillTesting.value = ''
   }
+}
+
+async function saveSyncConfig() {
+  syncSaving.value = true
+  syncResult.value = null
+  try {
+    const payload: SyncConfigPayload = {
+      enabled: syncConfig.enabled,
+      serverUrl: syncConfig.serverUrl,
+      syncIntervalMs: syncConfig.syncIntervalMs,
+    }
+    // Only send secrets if user actually changed them (not just masked "****")
+    if (syncConfig.jwtSecret && !syncConfig.jwtSecret.includes('****')) {
+      payload.jwtSecret = syncConfig.jwtSecret
+    }
+    if (syncConfig.agentToken && !syncConfig.agentToken.includes('****')) {
+      payload.agentToken = syncConfig.agentToken
+    }
+    const result = await configApi.saveSync(payload)
+    syncResult.value = { success: true, message: result.message }
+    await loadConfig() // refresh masked values
+  } catch (e: any) {
+    syncResult.value = { success: false, message: e.message || 'Save failed' }
+  } finally {
+    syncSaving.value = false
+  }
+}
+
+function generateJwtSecret() {
+  const array = new Uint8Array(32)
+  crypto.getRandomValues(array)
+  syncConfig.jwtSecret = Array.from(array, b => b.toString(16).padStart(2, '0')).join('')
+}
+
+function generateAgentToken() {
+  const array = new Uint8Array(16)
+  crypto.getRandomValues(array)
+  syncConfig.agentToken = Array.from(array, b => b.toString(16).padStart(2, '0')).join('')
 }
 
 async function saveSystemConfig() {
@@ -1010,6 +1181,43 @@ select.form-input {
 
 .error-text {
   color: #cf222e;
+}
+
+.sync-details {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.info-box {
+  margin-top: 20px;
+  padding: 16px;
+  background: #ddf4ff;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.info-box h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #0969da;
+}
+
+.info-box ol {
+  margin: 0;
+  padding-left: 20px;
+  color: #1f2328;
+}
+
+.info-box li {
+  margin-bottom: 4px;
+}
+
+.info-box code {
+  padding: 2px 6px;
+  background: rgba(0,0,0,0.06);
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 @media (max-width: 640px) {

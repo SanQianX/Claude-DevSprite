@@ -48,6 +48,13 @@ export interface SystemConfig {
     scanner?: { model?: string; hasApiKey?: boolean; maskedApiKey?: string; baseUrl?: string }
     fixer?: { model?: string; hasApiKey?: boolean; maskedApiKey?: string; baseUrl?: string }
   }
+  sync?: {
+    enabled: boolean
+    serverUrl: string
+    syncIntervalMs: number
+    jwtSecret: string
+    agentToken: string
+  }
   dbPath?: string
 }
 
@@ -73,6 +80,14 @@ export interface AITestResult {
   message: string
   latency?: number
   model?: string
+}
+
+export interface SyncConfigPayload {
+  enabled?: boolean
+  serverUrl?: string
+  syncIntervalMs?: number
+  jwtSecret?: string
+  agentToken?: string
 }
 
 export const configApi = {
@@ -106,6 +121,13 @@ export const configApi = {
     return apiCall('/config/ai-test', {
       method: 'POST',
       body: JSON.stringify(payload || {}),
+    })
+  },
+
+  async saveSync(payload: SyncConfigPayload): Promise<{ status: string; message: string }> {
+    return apiCall('/config/sync', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     })
   },
 }
