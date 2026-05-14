@@ -405,6 +405,62 @@ export const useChatStore = defineStore('chat', () => {
     return result.title ? result : null;
   }
 
+  // ─── Auto Task Creation from AI Response ────────────────────────────────
+
+  // Match [TASK: title] or [TASK: title | priority: high | status: todo | desc: ...]
+  const TASK_MARKER_RE = /\[TASK:\s*([^\]]+)\]/gi;
+
+  function parseTaskMarkers(content: string): Array<{ title: string; description?: string; priority?: string; status?: string }> {
+    const tasks: Array<{ title: string; description?: string; priority?: string; status?: string }> = [];
+    let match;
+
+    while ((match = TASK_MARKER_RE.exec(content)) !== null) {
+      const parts = match[1].split('|').map(s => s.trim());
+      const task: { title: string; description?: string; priority?: string; status?: string } = {
+        title: parts[0],
+      };
+
+      for (const part of parts.slice(1)) {
+        const colonIdx = part.indexOf(':');
+        if (colonIdx === -1) continue;
+        const key = part.slice(0, colonIdx).trim().toLowerCase();
+        const value = part.slice(colonIdx + 1).trim();
+        switch (key) {
+          case 'priority':
+            task.priority = value;
+            break;
+          case 'status':
+            task.status = value;
+            break;
+          case 'desc':
+          case 'description':
+            task.description = value;
+            break;
+        }
+      }
+
+      if (task.title) tasks.push(task);
+    }
+
+    return tasks;
+  }
+
+  async function handleSuggestedTasks(projectName: string) {
+    // Find the last agent message
+    const lastAgentMsg = [...messages.value].reverse().find(m => m.type === 'agent');
+    if (!lastAgentMsg) return;
+
+    const tasks = parseTaskMarkers(lastAgentMsg.content);
+    if (tasks.length === 0) return;
+
+    try {
+      const result = await dashboardApi.batchCreateTasks(projectName, tasks);
+      addSystemMessage(`AI 建议的任务已自动创建 (${result.tasks.length} 个): ${result.tasks.map(t => `#${t.id} ${t.title}`).join(', ')}`);
+    } catch (err: any) {
+      addSystemMessage(`自动创建任务失败: ${err.message || '未知错误'}`);
+    }
+  }
+
   async function handleTaskCommand(content: string, projectName: string): Promise<boolean> {
     const parsed = parseTaskCommand(content);
     if (!parsed) return false;
@@ -454,5 +510,6 @@ export const useChatStore = defineStore('chat', () => {
     addSystemMessage,
     clearMessages,
     handleTaskCommand,
+    handleSuggestedTasks,
   };
 });

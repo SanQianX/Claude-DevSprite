@@ -48,6 +48,19 @@ export const dashboardApi = {
     ))
   },
 
+  async batchCreateTasks(projectName: string, tasks: Array<{
+    title: string
+    description?: string
+    status?: string
+    priority?: string
+    estimated?: string
+  }>): Promise<{ tasks: Task[] }> {
+    return unwrap(apiClient.post<{ tasks: Task[] }>(
+      `/projects/${encodeURIComponent(projectName)}/tasks/batch`,
+      { tasks }
+    ))
+  },
+
   async updateTask(projectName: string, taskId: number, updates: Partial<Task>): Promise<void> {
     await unwrap(apiClient.put(
       `/projects/${encodeURIComponent(projectName)}/tasks/${taskId}`,

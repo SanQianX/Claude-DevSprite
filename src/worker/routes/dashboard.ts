@@ -27,6 +27,40 @@ export function registerDashboardRoutes(app: Express): void {
   }));
 
   /**
+   * POST /api/projects/:name/tasks/batch
+   * Create multiple tasks at once (used by chat auto-task creation)
+   */
+  app.post('/api/projects/:name/tasks/batch', asyncHandler(async (req: Request, res: Response) => {
+    const projectName = req.params.name;
+    const db = await getDatabase();
+    const project = db.getProject(projectName);
+    if (!project) throw createError('Project not found', 404);
+
+    const { tasks } = req.body;
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      throw createError('Tasks array is required', 400);
+    }
+
+    const VALID_STATUSES = ['backlog', 'todo', 'in_progress', 'review', 'done', 'cancelled'];
+    const VALID_PRIORITIES = ['low', 'medium', 'high', 'critical'];
+
+    const created = tasks.map(({ title, description, status, priority, estimated }: any) => {
+      if (!title) throw createError('Task title is required', 400);
+      return db.createTask({
+        project_id: project.id,
+        title,
+        description: description || null,
+        status: VALID_STATUSES.includes(status) ? status : 'backlog',
+        priority: VALID_PRIORITIES.includes(priority) ? priority : 'medium',
+        estimated: estimated || null,
+      });
+    });
+
+    logger.info(`Batch created ${created.length} tasks for project ${projectName}`);
+    res.status(201).json({ tasks: created });
+  }));
+
+  /**
    * POST /api/projects/:name/tasks
    * Create a new task
    */
