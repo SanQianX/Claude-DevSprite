@@ -130,11 +130,15 @@ const PROJECT = 'Claude-DevSprite';
 
     if (firstReview) {
       const approveRes = await page.evaluate(async (proj, id) => {
-        const r = await fetch(`/api/projects/${proj}/reviews/${id}/approve`, { method: 'POST' });
+        const r = await fetch(`/api/projects/${proj}/reviews/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'approved' })
+        });
         return { status: r.status, data: await r.json() };
       }, PROJECT, firstReview.id);
       test('Approve review returns 200', approveRes.status === 200, `got ${approveRes.status}`);
-      test('Review status changed', approveRes.data?.status === 'approved', `got ${approveRes.data?.status}`);
+      test('Review status changed', approveRes.data?.review?.status === 'approved', `got ${approveRes.data?.review?.status}`);
 
       // Restore to pending
       await page.evaluate(async (proj, id) => {
