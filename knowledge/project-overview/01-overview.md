@@ -1,7 +1,9 @@
 ---
 title: 项目概览
 category: overview
-updatedAt: 2026-05-12
+createdAt: '2026-05-14T09:26:43.143Z'
+updatedAt: '2026-05-14T09:26:43.143Z'
+relations: []
 ---
 
 # 项目概览
@@ -28,7 +30,8 @@ Claude-DevSprite 围绕五个核心环节构成完整闭环：
 - **智能文档生成**：AI 自动分析代码变更，生成包含架构说明、模块分析、变更日志等有价值的知识文档
 - **知识积累**：随着项目迭代，知识库自动更新和丰富，形成活文档（Living Documentation）
 - **源码关联**：文档中通过 `[source](/project/Claude-DevSprite/source?path=src/some/file.ts)` 链接可直接跳转到对应源码查看
-- **代码质量保障**：内置 [CodeReviewer](/project/Claude-DevSprite/source?path=src/analyzer/codeReviewer.ts) 和 [DesignChecker](/project/Claude-DevSprite/source?path=src/analyzer/designChecker.ts) 模块，自动发现安全、性能和设计一致性问题
+- **代码质量保障**：内置 [AgentScanner](/project/Claude-DevSprite/source?path=src/analyzer/agentScanner.ts)（两层 Agent 架构自动检测设计不一致）和 [DesignFixer](/project/Claude-DevSprite/source?path=src/analyzer/designFixer.ts)（自动修复）模块
+- **审查与任务同步**: 审查确认操作后，系统会自动在任务管理模块中创建一条已完成的任务记录，实现审查与项目进度管理的无缝联动。
 
 ### 对团队
 
@@ -54,35 +57,3 @@ Claude-DevSprite 围绕五个核心环节构成完整闭环：
 - **小团队协作**：建立共享知识库，减少口头沟通成本，促进知识沉淀
 - **开源项目**：自动维护文档，降低贡献者理解门槛
 - **学习研究**：分析他人项目结构，理解架构设计思路
-- **质量保障流程**：集成到 CI/CD，自动触发代码审查和设计一致性检查
-
-## 工作流程
-
-```
-git commit
-  ↓
-[CommitDetectorManager](/project/Claude-DevSprite/source?path=src/detectors/index.ts) 捕获 Commit 事件
-  （三级降级：Hook / Watcher / Poller）
-  ↓
-[AnalysisPipeline](/project/Claude-DevSprite/source?path=src/analyzer/pipeline.ts) 执行 7 步流水线：
-  1. [DiffCollector](/project/Claude-DevSprite/source?path=src/analyzer/diffCollector.ts) 收集变更内容
-  2. [ContextBuilder](/project/Claude-DevSprite/source?path=src/analyzer/contextBuilder.ts) 构建分析上下文（含已有知识库文档）
-  3. [ModeDecider](/project/Claude-DevSprite/source?path=src/analyzer/modeDecider.ts) 决定增量/全量分析模式
-  4. [PromptBuilder](/project/Claude-DevSprite/source?path=src/analyzer/promptBuilder.ts) + [AIProvider](/project/Claude-DevSprite/source?path=src/analyzer/aiProvider.ts) 调用 Claude 生成文档
-  5. [ResponseParser](/project/Claude-DevSprite/source?path=src/analyzer/responseParser.ts) + [DocumentGenerator](/project/Claude-DevSprite/source?path=src/analyzer/documentGenerator.ts) 产出结构化 Markdown
-  ↓
-[StorageManager](/project/Claude-DevSprite/source?path=src/knowledge/storageManager.ts) 写入 knowledge/ 目录
-  ↓
-Web Dashboard 实时展示更新（SSE 推送）
-```
-
-## 关键配置入口
-
-核心配置位于 [config.ts](/project/Claude-DevSprite/source?path=src/config.ts)，主要配置项包括：
-
-- `server.port`: Worker HTTP 端口（默认 38888）
-- `knowledge.directoryName`: 知识库目录名（代码中默认为 `doc`）
-- `analysis.mode`: 默认分析模式（incremental/full）
-- `analysis.maxRetries`: AI 调用重试次数
-- `detection.preferredStrategy`: 优先检测策略
-- `projectDiscovery.scanPaths`: 项目扫描路径列表

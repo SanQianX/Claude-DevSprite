@@ -96,17 +96,6 @@ watch(
   }
 );
 
-// Auto-create tasks from AI response when AI finishes
-watch(isThinking, (thinking, oldThinking) => {
-  if (oldThinking === true && thinking === false) {
-    // AI just finished — check for [TASK: ...] markers in the response
-    const projectName = route.params.projectName as string;
-    if (projectName) {
-      chatStore.handleSuggestedTasks(projectName);
-    }
-  }
-});
-
 onUnmounted(() => {
   chatStore.disconnect();
   teamsStore.stopPolling();

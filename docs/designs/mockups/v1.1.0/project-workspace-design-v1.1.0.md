@@ -908,7 +908,7 @@ DELETE /api/projects/:name/tasks/:taskId      → 删除任务
 GET    /api/projects/:name/reviews            → 获取审查列表 (支持筛选)
 POST   /api/projects/:name/reviews            → 创建审查项 (AI 调用)
 PATCH  /api/projects/:name/reviews/:reviewId  → 更新审查状态
-POST   /api/projects/:name/reviews/:reviewId/approve  → 批准并触发 AI 修复
+POST   /api/reviews/:reviewId/fix             → 批准并触发 AI 修复
 POST   /api/projects/:name/reviews/:reviewId/discuss   → 打开讨论 (关联 Chat)
 ```
 

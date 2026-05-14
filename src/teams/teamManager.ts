@@ -8,6 +8,7 @@ import { createLogger } from '../utils/logger';
 import { TeamExecutor } from './teamExecutor';
 import { TeamConfigManager } from './teamConfig';
 import { FileProtocol } from './fileProtocol';
+import { getDatabase } from '../worker/db';
 import type {
   TeamName,
   TeamConfig,
@@ -62,7 +63,23 @@ export class TeamManager extends EventEmitter {
 
     const leadEvents: AgentEvent[] = [];
 
-    for await (const event of leadExecutor.execute(userMessage)) {
+    // Add task marker instruction to prompt so lead outputs [TASK: ...] markers
+    const promptWithTaskInstruction = `${userMessage}
+
+---
+[SYSTEM] 当你在分析中识别到需要执行的具体任务（如创建文件、修复bug、添加功能等）时，请在回复中使用任务标记格式：
+- [TASK: 任务标题]
+- [TASK: 任务标题 | priority: high|medium|low|critical | status: todo|in_progress|backlog]
+- [TASK: 任务标题 | desc: 简短描述]
+
+示例：
+[TASK: 添加用户认证模块 | priority: high | desc: 实现 JWT token 认证]
+[TASK: 编写单元测试 | priority: medium]
+[TASK: 修复登录页面样式 | priority: low | status: backlog]
+
+这些标记会被系统自动识别并创建为任务。请只在确实需要跟踪的任务上使用标记，不要滥用。[/SYSTEM]`;
+
+    for await (const event of leadExecutor.execute(promptWithTaskInstruction)) {
       leadEvents.push(event);
 
       // Forward lead events to chat (preserve metadata for tool names)
@@ -75,6 +92,23 @@ export class TeamManager extends EventEmitter {
     }
 
     this.updateStatus('lead', 'idle');
+
+    // Step 2a: Parse [TASK: ...] markers from lead's response and save to DB
+    const agentContent = leadEvents
+      .filter(e => e.type === 'agent_message')
+      .map(e => e.content)
+      .join('\n');
+    const dbTasks = this.parseTaskMarkersFromContent(agentContent);
+    if (dbTasks.length > 0) {
+      yield { type: 'system', team: 'lead', content: `AI 建议创建 ${dbTasks.length} 个任务` };
+      try {
+        const created = await this.saveTasksToDb(dbTasks);
+        yield { type: 'system', team: 'lead', content: `已自动创建任务: ${created.map(t => `#${t.id} ${t.title}`).join(', ')}` };
+      } catch (err: any) {
+        logger.error(`Failed to save tasks to DB: ${err.message}`);
+        yield { type: 'error', team: 'lead', content: `自动创建任务失败: ${err.message}` };
+      }
+    }
 
     // Step 2: Parse tasks from lead's output
     const tasks = this.parseTasksFromLeadOutput(leadEvents);
@@ -311,6 +345,77 @@ ${task.acceptanceCriteria.map(c => `- ${c}`).join('\n')}
     }
 
     return Array.from(files);
+  }
+
+  /**
+   * Parse [TASK: ...] markers from agent content
+   * Format: [TASK: title] or [TASK: title | priority: high | status: todo | desc: ...]
+   */
+  private parseTaskMarkersFromContent(content: string): Array<{ title: string; description?: string; priority?: string; status?: string }> {
+    const tasks: Array<{ title: string; description?: string; priority?: string; status?: string }> = [];
+    const regex = /\[TASK:\s*([^\]]+)\]/gi;
+    let match;
+
+    while ((match = regex.exec(content)) !== null) {
+      const parts = match[1].split('|').map(s => s.trim());
+      const task: { title: string; description?: string; priority?: string; status?: string } = {
+        title: parts[0],
+      };
+
+      for (const part of parts.slice(1)) {
+        const colonIdx = part.indexOf(':');
+        if (colonIdx === -1) continue;
+        const key = part.slice(0, colonIdx).trim().toLowerCase();
+        const value = part.slice(colonIdx + 1).trim();
+        switch (key) {
+          case 'priority':
+            if (['low', 'medium', 'high', 'critical'].includes(value.toLowerCase())) {
+              task.priority = value.toLowerCase();
+            }
+            break;
+          case 'status':
+            if (['backlog', 'todo', 'in_progress', 'review', 'done'].includes(value.toLowerCase())) {
+              task.status = value.toLowerCase();
+            }
+            break;
+          case 'desc':
+          case 'description':
+            task.description = value;
+            break;
+        }
+      }
+
+      if (task.title) tasks.push(task);
+    }
+
+    return tasks;
+  }
+
+  /**
+   * Save tasks parsed from chat to the database
+   */
+  private async saveTasksToDb(tasks: Array<{ title: string; description?: string; priority?: string; status?: string }>): Promise<Array<{ id: number; title: string; priority: string; status: string }>> {
+    const db = await getDatabase();
+    const project = db.getProjectByPath(this.projectPath);
+    if (!project) {
+      throw new Error(`Project not found for path: ${this.projectPath}`);
+    }
+
+    const created: Array<{ id: number; title: string; priority: string; status: string }> = [];
+    for (const task of tasks) {
+      const result = db.createTask({
+        project_id: project.id,
+        title: task.title,
+        description: task.description || null,
+        status: task.status || 'backlog',
+        priority: task.priority || 'medium',
+        estimated: null,
+      });
+      created.push({ id: result.id, title: result.title, priority: result.priority, status: result.status });
+    }
+
+    logger.info(`Created ${created.length} tasks from chat for project ${project.id}`);
+    return created;
   }
 
   /**

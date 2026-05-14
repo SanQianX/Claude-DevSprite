@@ -129,11 +129,11 @@
 #### 3.3 任务同步
 | 排查项 | 测试方法 | 预期结果 |
 |--------|----------|----------|
-| 聊天创建任务 | AI 聊天中创建任务 | ⚠️ **未实现** — 聊天不会自动创建任务 |
+| 聊天创建任务 | AI 聊天中创建任务 | ✅ **已实现** — 支持 /task 命令和 [TASK: ...] 标记自动创建 |
 | 审查创建任务 | 审查项创建任务 | ⚠️ **未实现** — 修复不会自动创建任务 |
 | 进度更新 | 任务状态变化 | Dashboard 数据实时更新 (需手动刷新) |
 
-> **说明**: 聊天→任务和审查→任务的自动同步是设计意图，尚未实现。目前任务只能通过 Dashboard 的"添加任务"按钮手动创建。
+> **说明**: 聊天→任务的自动同步已实现。用户可通过 /task 命令创建任务，AI 回复中的 [TASK: ...] 标记会被自动识别并创建任务。审查→任务的同步仍需手动。
 
 ---
 
@@ -290,7 +290,7 @@ chatStore 事件处理器 → messages ref 更新
 DevChatView 通过 props 传递 → ChatMessageList.vue 渲染
 ```
 
-> **注意**: 前端完全使用 WebSocket 通信。`POST /api/chat/send` (SSE) 端点存在于后端但从未被前端调用 (遗留端点)。
+> **注意**: 前端完全使用 WebSocket 通信。SSE 聊天端点已移除，聊天通过 WebSocket 进行。
 
 #### 路径 2: 审查修复
 ```
@@ -399,7 +399,6 @@ onMounted(() => {
 | PUT /reviews/:id/ignore | `reviews.ts` | 同上，前端用 PUT /projects/:name/reviews/:id 代替 |
 | GET /api/projects/:name/reviews | `reviews.ts:34` | 被 dashboard.ts 版本遮蔽，支持 ?status 过滤但不可达 |
 | approveReview() 函数 | `DashboardView.vue:261` | 存在但无按钮调用 (死代码) |
-| POST /api/chat/send | `teams.ts:147` | SSE 端点存在，前端用 WebSocket 代替 |
 | LogsView.vue | `web/src/views/LogsView.vue` | 文件存在但 /logs 路由已移除 |
 | createReview/deleteReview | `dashboard.ts` API | 已定义但无组件调用 |
 
@@ -412,7 +411,7 @@ onMounted(() => {
 2. **DevChat 会话切换** - 切换会话→历史保留→切换回来
 3. **AI 审查扫描** - 触发扫描→结果显示→详情查看
 4. **AI 审查修复** - 点击"批准修复"→POST /fix→AI 生成修复→写入文件
-5. ~~**任务创建同步**~~ - ⚠️ 未实现 (聊天/审查不会自动创建任务)
+5. **任务创建同步** - ✅ 聊天创建任务已实现 (/task 命令 + [TASK: ...] 标记)
 
 ### 🟠 P1 - 重要排查
 6. **任务状态管理** - 状态切换→统计更新 (编辑/删除 UI 未暴露)

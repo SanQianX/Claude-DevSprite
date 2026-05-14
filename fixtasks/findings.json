@@ -1,0 +1,415 @@
+{
+  "date": "2026-05-14",
+  "findings": [
+    {
+      "id": 312,
+      "title": "reviews.ts 路由被 dashboard.ts 遮蔽",
+      "severity": "warning",
+      "file": "src/worker/routes/reviews.ts",
+      "line": 137,
+      "category": "api-mismatch",
+      "dirName": "reviews-route-shadow-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 309,
+      "title": "路由遮蔽：dashboard.ts 遮蔽 reviews.ts",
+      "severity": "warning",
+      "file": "src/worker/routes/index.ts",
+      "line": 36,
+      "category": "api-mismatch",
+      "dirName": "route-shadow-dashboard-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 308,
+      "title": "未使用的 dashboardStore.approveReview",
+      "severity": "warning",
+      "file": "web/src/stores/dashboard.ts",
+      "line": 79,
+      "category": "dead-code",
+      "dirName": "approveReview-unused-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 304,
+      "title": "审查修复 → 任务创建未实现",
+      "severity": "warning",
+      "file": "src/worker/routes/reviews.ts",
+      "line": 304,
+      "category": "missing-impl",
+      "dirName": "review-fix-task-unimplemented-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 301,
+      "title": "approveReview 前端有定义但无 UI 触发",
+      "severity": "warning",
+      "file": "web/src/stores/dashboard.ts",
+      "line": 79,
+      "category": "dead-code",
+      "dirName": "approveReview-no-ui-trigger-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 300,
+      "title": "路由冲突：dashboard.ts 遮蔽 reviews.ts 的 GET /reviews",
+      "severity": "warning",
+      "file": "src/worker/routes/dashboard.ts + reviews.ts",
+      "line": 110,
+      "category": "api-mismatch",
+      "dirName": "route-conflict-dashboard-reviews-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 299,
+      "title": "死代码: dashboardStore.approveReview 函数未被调用",
+      "severity": "warning",
+      "file": "web/src/stores/dashboard.ts",
+      "line": 79,
+      "category": "dead-code",
+      "dirName": "approveReview-dead-code-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 298,
+      "title": "路由冲突: GET /reviews 被 dashboard.ts 版本遮蔽",
+      "severity": "warning",
+      "file": "src/worker/routes/dashboard.ts",
+      "line": null,
+      "category": "api-mismatch",
+      "dirName": "route-conflict-get-reviews-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 297,
+      "title": "功能缺失: 审查修复不会自动创建/同步任务",
+      "severity": "warning",
+      "file": "web/src/stores/dashboard.ts",
+      "line": 89,
+      "category": "missing-impl",
+      "dirName": "review-fix-task-sync-missing-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 296,
+      "title": "功能缺失: 聊天不会自动创建任务",
+      "severity": "warning",
+      "file": "web/src/views/DevChatView.vue",
+      "line": null,
+      "category": "missing-impl",
+      "dirName": "chat-task-creation-missing-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 294,
+      "title": "功能缺失: 任务编辑/删除 UI 未暴露",
+      "severity": "warning",
+      "file": "web/src/views/DashboardView.vue",
+      "line": null,
+      "category": "missing-impl",
+      "dirName": "task-edit-delete-ui-missing-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 292,
+      "title": "死代码: POST /api/chat/send SSE 端点未被使用",
+      "severity": "warning",
+      "file": "src/worker/routes/teams.ts",
+      "line": null,
+      "category": "dead-code",
+      "dirName": "sse-chat-endpoint-unused-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 289,
+      "title": "审查修复任务同步未实现",
+      "severity": "warning",
+      "file": "src/worker/routes/reviews.ts",
+      "line": 304,
+      "category": "missing-impl",
+      "dirName": "review-fix-task-sync-unimplemented-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 288,
+      "title": "聊天创建任务功能未实现",
+      "severity": "warning",
+      "file": "src/analyzer/agentScanner.ts",
+      "line": 24,
+      "category": "missing-impl",
+      "dirName": "chat-task-creation-unimplemented-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 287,
+      "title": "任务编辑/删除 UI 未暴露",
+      "severity": "warning",
+      "file": "web/src/views/DashboardView.vue",
+      "line": 1,
+      "category": "missing-impl",
+      "dirName": "task-edit-delete-ui-missing-2-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 284,
+      "title": "POST /api/chat/send SSE 端点未被使用",
+      "severity": "warning",
+      "file": "src/worker/routes/teams.ts",
+      "line": 145,
+      "category": "dead-code",
+      "dirName": "post-chat-send-sse-unused-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 283,
+      "title": "GET /reviews 路由被遮蔽",
+      "severity": "warning",
+      "file": "src/worker/routes/dashboard.ts",
+      "line": 110,
+      "category": "api-mismatch",
+      "dirName": "get-reviews-route-shadow-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 282,
+      "title": "approveReview 函数未被调用（死代码）",
+      "severity": "warning",
+      "file": "web/src/stores/dashboard.ts",
+      "line": 79,
+      "category": "dead-code",
+      "dirName": "approveReview-dead-code-2-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 280,
+      "title": "Dashboard store 的 approveReview 函数定义但未被 UI 调用",
+      "severity": "warning",
+      "file": "web/src/stores/dashboard.ts",
+      "line": 79,
+      "category": "dead-code",
+      "dirName": "approveReview-definition-unused-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 279,
+      "title": "LogsView.vue 组件存在但路由已移除",
+      "severity": "warning",
+      "file": "web/src/views/LogsView.vue",
+      "line": null,
+      "category": "dead-code",
+      "dirName": "logsview-route-removed-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 278,
+      "title": "POST /api/chat/send SSE 端点成为死代码",
+      "severity": "warning",
+      "file": "src/worker/routes/teams.ts",
+      "line": 147,
+      "category": "dead-code",
+      "dirName": "post-chat-send-sse-dead-code-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 275,
+      "title": "SSE 聊天端点死代码 - POST /api/chat/send 和 GET /api/chat/stream",
+      "severity": "warning",
+      "file": "src/worker/routes/teams.ts",
+      "line": 145,
+      "category": "dead-code",
+      "dirName": "sse-chat-endpoints-dead-code-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 271,
+      "title": "LogsView.vue 已从路由中移除但文件仍存在",
+      "severity": "warning",
+      "file": "web/src/views/LogsView.vue",
+      "line": 1,
+      "category": "dead-code",
+      "dirName": "logsview-route-removed-file-exists-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 268,
+      "title": "SSE 聊天端点死代码 - POST /api/chat/send 和 GET /api/chat/stream",
+      "severity": "warning",
+      "file": "src/worker/routes/teams.ts",
+      "line": 145,
+      "category": "dead-code",
+      "dirName": "sse-chat-endpoints-dead-code-2-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 266,
+      "title": "路由重复 - dashboard.ts 和 reviews.ts 各自实现了相同的 /api/projects/:name/reviews 端点",
+      "severity": "warning",
+      "file": "src/worker/routes/dashboard.ts",
+      "line": 110,
+      "category": "api-mismatch",
+      "dirName": "route-duplicate-dashboard-reviews-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 264,
+      "title": "状态不匹配 - taskGroups 中使用 status='progress' 但 API 只支持 'in_progress'",
+      "severity": "warning",
+      "file": "web/src/views/DashboardView.vue",
+      "line": 313,
+      "category": "state-mismatch",
+      "dirName": "status-mismatch-progress-in-progress-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 262,
+      "title": "POST /api/chat/send SSE 端点是遗留代码",
+      "severity": "warning",
+      "file": "src/worker/routes/teams.ts",
+      "line": 147,
+      "category": "dead-code",
+      "dirName": "post-chat-send-sse-legacy-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 261,
+      "title": "dashboardStore.approveReview 函数无 UI 调用",
+      "severity": "warning",
+      "file": "web/src/stores/dashboard.ts",
+      "line": 79,
+      "category": "dead-code",
+      "dirName": "approveReview-no-ui-call-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 260,
+      "title": "dashboardApi.createReview/deleteReview 无 UI 调用",
+      "severity": "warning",
+      "file": "web/src/api/dashboard.ts",
+      "line": 71,
+      "category": "dead-code",
+      "dirName": "dashboardApi-create-delete-unused-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 259,
+      "title": "LogsView.vue 文件存在但无路由映射",
+      "severity": "warning",
+      "file": "web/src/views/LogsView.vue",
+      "line": 1,
+      "category": "dead-code",
+      "dirName": "logsview-file-exists-no-route-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 258,
+      "title": "前端路由缺失：/logs 相关文件存在但未被路由使用",
+      "severity": "warning",
+      "file": "web/src/router/index.ts",
+      "line": 1,
+      "category": "dead-code",
+      "dirName": "logs-route-missing-files-exist-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 327,
+      "title": "首页表格搜索/过滤功能未实现",
+      "severity": "info",
+      "file": "web/src/views/HomePage.vue",
+      "line": null,
+      "category": "missing-impl",
+      "dirName": "home-page-search-unimplemented-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 315,
+      "title": "LogsView.vue 文件存在但 /logs 路由已移除",
+      "severity": "info",
+      "file": "web/src/views/LogsView.vue",
+      "line": 1,
+      "category": "dead-code",
+      "dirName": "logsview-route-removed-2-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 311,
+      "title": "未路由组件：LogsView.vue",
+      "severity": "info",
+      "file": "web/src/views/LogsView.vue",
+      "line": 1,
+      "category": "dead-code",
+      "dirName": "logsview-unrouted-component-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 310,
+      "title": "死代码端点：POST /api/chat/send (SSE)",
+      "severity": "info",
+      "file": "src/worker/routes/teams.ts",
+      "line": 147,
+      "category": "dead-code",
+      "dirName": "sse-chat-endpoint-dead-code-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 306,
+      "title": "LogsView.vue 死代码",
+      "severity": "info",
+      "file": "web/src/views/LogsView.vue",
+      "line": 1,
+      "category": "dead-code",
+      "dirName": "logsview-dead-code-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 305,
+      "title": "首页项目搜索/过滤功能未实现",
+      "severity": "info",
+      "file": "web/src/views/HomePage.vue",
+      "line": 1,
+      "category": "missing-impl",
+      "dirName": "home-page-search-unimplemented-2-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 295,
+      "title": "功能缺失: 首页表格无搜索/过滤功能",
+      "severity": "info",
+      "file": "web/src/views/HomePage.vue",
+      "line": null,
+      "category": "missing-impl",
+      "dirName": "home-table-search-missing-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 276,
+      "title": "未使用的 approveReview 函数",
+      "severity": "info",
+      "file": "web/src/stores/dashboard.ts",
+      "line": 79,
+      "category": "dead-code",
+      "dirName": "approveReview-unused-2-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 270,
+      "title": "未使用的 approveReview 函数",
+      "severity": "info",
+      "file": "web/src/stores/dashboard.ts",
+      "line": 79,
+      "category": "dead-code",
+      "dirName": "approveReview-unused-3-fix_2026-05-14",
+      "status": "pending"
+    },
+    {
+      "id": 269,
+      "title": "未使用视图组件 - LogsView.vue",
+      "severity": "info",
+      "file": "web/src/views/LogsView.vue",
+      "line": null,
+      "category": "dead-code",
+      "dirName": "logsview-unrouted-component-2-fix_2026-05-14",
+      "status": "pending"
+    }
+  ]
+}

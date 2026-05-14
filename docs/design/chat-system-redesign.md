@@ -103,10 +103,10 @@ The current Claude-DevSprite chat system uses SSE (Server-Sent Events) for one-w
 
 ### 2.2 Current Data Flow
 
-1. **User sends message**: `POST /api/chat/send` with message body
-2. **Server processes**: `TeamManager.handleChat()` spawns Claude CLI subprocesses
+1. **User sends message**: WebSocket message `{ type: 'chat.send', sessionId, content }`
+2. **Server processes**: `wsHandler.handleChatSend()` → `TeamManager.handleChat()` spawns Claude CLI subprocesses
 3. **Events streamed**: CLI outputs JSON lines → parsed into `AgentEvent` → mapped to `ChatEvent`
-4. **SSE broadcast**: `SSEBroadcaster.broadcast()` pushes to all connected `EventSource` clients
+4. **WebSocket broadcast**: `wsHandler` pushes to all connected WebSocket clients
 5. **Frontend receives**: `chatStore.handleChatEvent()` adds to `messages` ref
 
 ### 2.3 Key Issues

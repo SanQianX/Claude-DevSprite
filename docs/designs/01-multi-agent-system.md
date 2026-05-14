@@ -677,8 +677,7 @@ web/src/
 
 | 路由 | 方法 | 说明 |
 |------|------|------|
-| `/api/chat/send` | POST | 发送聊天消息，返回 SSE 流 |
-| `/api/chat/history` | GET | 获取聊天历史 |
+| `/ws` | WebSocket | 聊天通信（替代原 SSE 端点） |
 | `/api/teams` | GET | 获取所有 Team 列表 |
 | `/api/teams/:name` | GET | 获取单个 Team 配置 |
 | `/api/teams/:name` | PUT | 更新 Team 配置 |
@@ -688,33 +687,19 @@ web/src/
 | `/api/dev-sessions/:id` | GET | 获取会话详情 |
 | `/api/dev-sessions/:id/timeline` | GET | 获取会话时间线 |
 
-### 7.2 聊天 API（SSE 流式）
+### 7.2 聊天 API（WebSocket）
 
 ```
-POST /api/chat/send
-Body: { "message": "给项目添加用户登录功能", "sessionId": "xxx" }
-Response: SSE stream
+WebSocket 连接: ws://host/ws
 
-event: agent_message
-data: {"team":"lead","type":"thinking","content":"分析用户需求..."}
+发送消息:
+{ "type": "chat.send", "sessionId": "xxx", "content": "给项目添加用户登录功能" }
 
-event: agent_message
-data: {"team":"lead","type":"task_assigned","taskId":"task-001","assignedTo":"dev"}
-
-event: tool_call
-data: {"team":"dev","tool":"read_file","args":{"path":"src/config.ts"}}
-
-event: tool_result
-data: {"team":"dev","tool":"read_file","result":"..."}
-
-event: file_change
-data: {"team":"dev","action":"created","path":"src/auth/login.ts"}
-
-event: agent_message
-data: {"team":"dev","type":"completed","content":"已创建 3 个文件"}
-
-event: agent_message
-data: {"team":"lead","type":"summary","content":"开发完成，已更新知识库"}
+接收消息:
+{ "type": "chat.thinking", "sessionId": "...", "content": "分析用户需求...", "team": "lead" }
+{ "type": "chat.message", "sessionId": "...", "content": "已创建 3 个文件", "team": "dev" }
+{ "type": "chat.tool_call", "sessionId": "...", "tool": "read_file", "team": "dev" }
+{ "type": "chat.tool_result", "sessionId": "...", "tool": "read_file", "result": "...", "team": "dev" }
 ```
 
 ---

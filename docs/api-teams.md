@@ -5,7 +5,9 @@
 
 ## 概述
 
-Teams API 提供多 Agent 团队的配置管理、状态查询、实时聊天和任务控制功能。所有端点均以 `/api` 为前缀，返回 JSON 格式数据。
+Teams API 提供多 Agent 团队的配置管理、状态查询和任务控制功能。所有端点均以 `/api` 为前缀，返回 JSON 格式数据。
+
+> **注意**: 聊天通信已完全迁移至 WebSocket（路径: `/ws`），不再提供 HTTP/SSE 聊天端点。
 
 ---
 
@@ -186,67 +188,6 @@ GET /api/teams/status/all
 
 ---
 
-## 实时聊天
-
-### 发送消息 (SSE 流)
-
-```
-POST /api/chat/send
-```
-
-**请求体:**
-```json
-{
-  "message": "请帮我实现用户登录功能",
-  "projectPath": "D:/my-project"
-}
-```
-
-**响应:** `text/event-stream` (SSE)
-
-每个事件格式:
-```
-data: {"team":"lead","content":"收到任务，正在分配...","type":"agent_message"}
-
-data: {"team":"dev","content":"开始实现登录模块","type":"agent_message"}
-
-data: {"team":"dev","content":"已完成 auth.ts 的编写","type":"tool_result"}
-```
-
-**事件类型:**
-
-| type | 说明 |
-|------|------|
-| agent_message | Agent 文本消息 |
-| tool_result | 工具执行结果 |
-| task_update | 任务状态更新 |
-| error | 错误信息 |
-| done | 流结束标记 |
-
----
-
-### 实时事件流
-
-```
-GET /api/chat/stream
-```
-
-**响应:** `text/event-stream` (SSE)
-
-建立持久 SSE 连接，接收所有团队活动的实时推送。
-
-初始事件:
-```
-data: {"type":"connected","timestamp":1683072000000}
-```
-
-后续事件由 `sseBroadcaster` 推送，包括:
-- 团队状态变更
-- 分析进度更新
-- 聊天消息广播
-
----
-
 ## 任务控制
 
 ### 中止单个团队
@@ -323,53 +264,6 @@ POST /api/teams/abort-all
 ---
 
 ## 使用示例
-
-### JavaScript (fetch)
-
-```javascript
-// 发送聊天消息并监听 SSE 流
-const response = await fetch('/api/chat/send', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    message: '请帮我实现用户登录功能',
-    projectPath: 'D:/my-project'
-  })
-});
-
-const reader = response.body.getReader();
-const decoder = new TextDecoder();
-
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-
-  const text = decoder.decode(value);
-  const lines = text.split('\n');
-
-  for (const line of lines) {
-    if (line.startsWith('data: ')) {
-      const event = JSON.parse(line.slice(6));
-      console.log(`[${event.team}] ${event.content}`);
-    }
-  }
-}
-```
-
-### EventSource (SSE 监听)
-
-```javascript
-const events = new EventSource('/api/chat/stream');
-
-events.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log('Event:', data);
-};
-
-events.onerror = () => {
-  console.error('SSE connection error');
-};
-```
 
 ### cURL
 
