@@ -130,10 +130,11 @@ export const dashboardApi = {
   },
 
   // Fixer config
-  async getFixerConfig(): Promise<{ enabled: boolean; intervalMs: number; isFixing: boolean }> {
-    return unwrap(apiClient.get<{ enabled: boolean; intervalMs: number; isFixing: boolean }>(
-      '/fixer/config'
-    ))
+  async getFixerConfig(): Promise<{
+    enabled: boolean; intervalMs: number; isFixing: boolean;
+    currentFixDir: string | null; currentFixIndex: number; totalFixes: number;
+  }> {
+    return unwrap(apiClient.get('/fixer/config'))
   },
 
   async updateFixerConfig(config: { enabled?: boolean; intervalMs?: number }): Promise<{ config: { enabled: boolean; intervalMs: number; isFixing: boolean } }> {

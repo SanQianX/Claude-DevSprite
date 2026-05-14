@@ -325,6 +325,9 @@ export class AgentFixer {
   private isFixing = false;
   private enabled = false;
   private currentProcess: ChildProcess | null = null;
+  private currentFixDir: string | null = null;
+  private currentFixIndex = 0;
+  private totalFixes = 0;
 
   constructor(options?: { fixIntervalMs?: number }) {
     this.fixIntervalMs = options?.fixIntervalMs ?? 30 * 60 * 1000; // 30 minutes default
@@ -335,6 +338,9 @@ export class AgentFixer {
       enabled: this.enabled,
       intervalMs: this.fixIntervalMs,
       isFixing: this.isFixing,
+      currentFixDir: this.currentFixDir,
+      currentFixIndex: this.currentFixIndex,
+      totalFixes: this.totalFixes,
     };
   }
 
@@ -475,10 +481,16 @@ export class AgentFixer {
     fixtasksBase: string,
     findingsMap: Map<string, number> // dirName → reviewId
   ): Promise<void> {
+    this.totalFixes = fixDirs.length;
+
     for (let i = 0; i < fixDirs.length; i++) {
       const fixDir = fixDirs[i];
       const fixPath = path.join(fixtasksBase, fixDir);
       const reviewId = findingsMap.get(fixDir);
+
+      // 更新当前修复状态 (供前端轮询)
+      this.currentFixDir = fixDir;
+      this.currentFixIndex = i + 1;
 
       logger.info(`[AgentFixer] Fixing [${i + 1}/${fixDirs.length}]: ${fixDir}`);
 
@@ -510,6 +522,11 @@ export class AgentFixer {
 
       logger.info(`[AgentFixer] Completed fix: ${fixDir} — Orchestrator moving to next Worker`);
     }
+
+    // 修复完成，清除当前状态
+    this.currentFixDir = null;
+    this.currentFixIndex = 0;
+    this.totalFixes = 0;
   }
 
   // ─── Orchestrator (Level 1) ────────────────────────────────────────────────

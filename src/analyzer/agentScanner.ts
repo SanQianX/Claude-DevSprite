@@ -399,6 +399,11 @@ export class AgentScanner {
   }
 
   private get isScanning(): boolean {
+    // Guard: if isBatchScanning is true but no active projects, reset the flag
+    // This handles cases where the flag got stuck (e.g. daemon killed mid-scan)
+    if (this.isBatchScanning && this.activeScanInfo.size === 0) {
+      this.isBatchScanning = false;
+    }
     return this.isBatchScanning || this.activeScanInfo.size > 0;
   }
 

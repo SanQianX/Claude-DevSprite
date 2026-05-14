@@ -18,6 +18,9 @@ export interface FixerConfig {
   enabled: boolean;
   intervalMs: number;
   isFixing: boolean;
+  currentFixDir: string | null;
+  currentFixIndex: number;
+  totalFixes: number;
 }
 
 export class DesignFixer {
@@ -37,6 +40,9 @@ export class DesignFixer {
       enabled: this.enabled,
       intervalMs: this.fixIntervalMs,
       isFixing: this.isFixing,
+      currentFixDir: null,
+      currentFixIndex: 0,
+      totalFixes: 0,
     };
   }
 
