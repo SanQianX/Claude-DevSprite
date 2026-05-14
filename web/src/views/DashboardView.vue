@@ -259,6 +259,7 @@
 import { ref, computed, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
+import { getWebSocketClient, type WsMessage } from '@/api/websocket'
 import { analysisApi } from '@/api/analysis'
 import type { Task, Review } from '@/api/dashboard'
 
@@ -595,6 +596,18 @@ function getTaskMeta(task: any): string {
   return parts.join(' | ') || '待开发'
 }
 
+// WebSocket event handlers for real-time dashboard updates
+function handleDashboardUpdate(_message: WsMessage) {
+  dashboardStore.fetchAll(props.projectName)
+}
+
+function handleWsStateChange(message: WsMessage) {
+  if (message.state === 'authenticated') {
+    // Re-fetch data when WebSocket reconnects and authenticates
+    dashboardStore.fetchAll(props.projectName)
+  }
+}
+
 onMounted(async () => {
   // Fetch project details
   try {
@@ -628,6 +641,13 @@ onMounted(async () => {
   dataPollTimer = setInterval(() => {
     dashboardStore.fetchAll(props.projectName)
   }, 10000)
+
+  // Listen for WebSocket push events for real-time dashboard updates
+  const wsClient = getWebSocketClient()
+  wsClient.on('dashboard.tasks.updated', handleDashboardUpdate)
+  wsClient.on('dashboard.reviews.updated', handleDashboardUpdate)
+  wsClient.on('dashboard.data.updated', handleDashboardUpdate)
+  wsClient.on('stateChange', handleWsStateChange)
 })
 
 onUnmounted(() => {
@@ -639,6 +659,12 @@ onUnmounted(() => {
     clearInterval(dataPollTimer)
     dataPollTimer = null
   }
+  // Unregister WebSocket handlers
+  const wsClient = getWebSocketClient()
+  wsClient.off('dashboard.tasks.updated', handleDashboardUpdate)
+  wsClient.off('dashboard.reviews.updated', handleDashboardUpdate)
+  wsClient.off('dashboard.data.updated', handleDashboardUpdate)
+  wsClient.off('stateChange', handleWsStateChange)
 })
 </script>
 
