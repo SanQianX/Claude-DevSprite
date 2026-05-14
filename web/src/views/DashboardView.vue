@@ -294,6 +294,8 @@ const fixerIntervalMinutes = ref(5)
 
 // Scanner status polling
 let statusPollTimer: ReturnType<typeof setInterval> | null = null
+// Data polling for tasks/reviews auto-refresh
+let dataPollTimer: ReturnType<typeof setInterval> | null = null
 const activeScanProjects = computed(() => dashboardStore.scannerStatus.activeProjects)
 const lastScanTimeText = computed(() => {
   const t = dashboardStore.scannerStatus.lastScanTime
@@ -621,12 +623,21 @@ onMounted(async () => {
   statusPollTimer = setInterval(() => {
     dashboardStore.fetchScannerStatus()
   }, 5000)
+
+  // Poll tasks/reviews data every 10 seconds to auto-refresh when status changes
+  dataPollTimer = setInterval(() => {
+    dashboardStore.fetchAll(props.projectName)
+  }, 10000)
 })
 
 onUnmounted(() => {
   if (statusPollTimer) {
     clearInterval(statusPollTimer)
     statusPollTimer = null
+  }
+  if (dataPollTimer) {
+    clearInterval(dataPollTimer)
+    dataPollTimer = null
   }
 })
 </script>
