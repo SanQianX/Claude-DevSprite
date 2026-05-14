@@ -57,6 +57,10 @@
                       <div class="task-title">{{ task.title }}</div>
                       <div class="task-meta">{{ getTaskMeta(task) }}</div>
                     </div>
+                    <div v-if="!task.severity" class="task-actions">
+                      <button class="task-action-btn" title="编辑" @click.stop="openEditTask(task)">✏️</button>
+                      <button class="task-action-btn task-action-delete" title="删除" @click.stop="handleDeleteTask(task.id)">🗑️</button>
+                    </div>
                   </div>
                 </template>
               </div>
@@ -236,6 +240,18 @@
         </div>
       </div>
     </div>
+
+    <!-- Edit Task Dialog -->
+    <div v-if="showEditTask" class="dialog-overlay" @click.self="showEditTask = false">
+      <div class="dialog">
+        <h3>编辑任务</h3>
+        <input v-model="editTaskTitle" class="dialog-input" placeholder="任务标题" />
+        <div class="dialog-actions">
+          <button class="btn btn-ignore" @click="showEditTask = false">取消</button>
+          <button class="btn btn-approve" @click="saveEditTask">保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -255,6 +271,9 @@ const dashboardStore = useDashboardStore()
 
 const showAddTask = ref(false)
 const newTaskTitle = ref('')
+const showEditTask = ref(false)
+const editTaskId = ref<number | null>(null)
+const editTaskTitle = ref('')
 const statusFilter = ref('all')
 const severityFilter = ref('all')
 const selectedReviewId = ref<number | null>(null)
@@ -528,6 +547,27 @@ async function addTask() {
   showAddTask.value = false
 }
 
+function openEditTask(task: any) {
+  editTaskId.value = task.id
+  editTaskTitle.value = task.title
+  showEditTask.value = true
+}
+
+async function saveEditTask() {
+  if (!editTaskTitle.value.trim() || !editTaskId.value) return
+  await dashboardStore.updateTask(props.projectName, editTaskId.value, {
+    title: editTaskTitle.value,
+  })
+  showEditTask.value = false
+  editTaskId.value = null
+  editTaskTitle.value = ''
+}
+
+async function handleDeleteTask(taskId: number) {
+  if (!confirm('确定要删除此任务吗？')) return
+  await dashboardStore.deleteTask(props.projectName, taskId)
+}
+
 function getStatusColor(status: string): string {
   if (status === 'done' || status === 'fixed' || status === 'confirmed') return 'green'
   if (status === 'progress' || status === 'pending' || status === 'approved') return 'blue'
@@ -766,6 +806,30 @@ onUnmounted(() => {
 .task-info { flex: 1; }
 .task-title { font-size: 14px; font-weight: 500; color: #1e293b; }
 .task-meta { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+
+.task-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 150ms;
+  flex-shrink: 0;
+}
+
+.task-item:hover .task-actions { opacity: 1; }
+
+.task-action-btn {
+  padding: 4px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition: background 150ms;
+}
+
+.task-action-btn:hover { background: #e2e8f0; }
+.task-action-delete:hover { background: #fee2e2; }
 
 .empty-tasks, .empty-reviews {
   padding: 24px;
