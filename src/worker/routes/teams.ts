@@ -7,7 +7,6 @@ import type { Express, Request, Response } from 'express';
 import { createLogger } from '../../utils/logger';
 import { TeamManager } from '../../teams/teamManager';
 import { TeamConfigManager } from '../../teams/teamConfig';
-import { sseBroadcaster } from '../sseBroadcaster';
 import type { TeamName } from '../../teams/types';
 
 const logger = createLogger('teams-routes');
@@ -139,70 +138,6 @@ export function registerTeamRoutes(app: Express): void {
       logger.error(`Failed to test team ${req.params.name}: ${error.message}`);
       res.status(500).json({ error: error.message });
     }
-  });
-
-  /**
-   * POST /api/chat/send - Send chat message and get SSE stream
-   */
-  app.post('/api/chat/send', async (req: Request, res: Response) => {
-    try {
-      const { message, projectPath } = req.body;
-
-      if (!message) {
-        return res.status(400).json({ error: 'Message is required' });
-      }
-
-      const project = projectPath || process.cwd();
-      const manager = getTeamManager(project);
-
-      // Set up SSE
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      });
-
-      // Send events from team manager
-      for await (const event of manager.handleChat(message)) {
-        const data = `data: ${JSON.stringify(event)}\n\n`;
-        res.write(data);
-
-        // Also broadcast to all SSE clients
-        sseBroadcaster.broadcast({
-          type: 'chat_event',
-          team: event.team,
-          content: event.content,
-        });
-      }
-
-      res.end();
-    } catch (error: any) {
-      logger.error(`Failed to process chat message: ${error.message}`);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  /**
-   * POST /api/chat/stream - SSE stream for real-time updates
-   */
-  app.get('/api/chat/stream', (req: Request, res: Response) => {
-    // Set up SSE
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    });
-
-    // Add client to broadcaster
-    sseBroadcaster.addClient(res);
-
-    // Send initial connection event
-    res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: Date.now() })}\n\n`);
-
-    // Handle client disconnect
-    req.on('close', () => {
-      logger.info('SSE client disconnected');
-    });
   });
 
   /**
