@@ -123,6 +123,14 @@
             <div v-else-if="lastScanTimeText" class="scan-last-time">
               上次扫描: {{ lastScanTimeText }}
             </div>
+            <!-- Fixer status indicator -->
+            <div v-if="fixerStore.isFixing" class="fixer-active-bar">
+              <div class="fixer-pulse"></div>
+              <span class="fixer-active-text">
+                修复中 [{{ fixerStore.currentFixIndex }}/{{ fixerStore.totalFixes }}]:
+                <span class="fixer-current-dir">{{ fixerStore.currentFixDir }}</span>
+              </span>
+            </div>
             <span class="scan-divider"></span>
             <label class="scan-toggle">
               <input type="checkbox" v-model="autoFixerEnabled" @change="toggleAutoFixer" />
@@ -269,6 +277,14 @@ const props = defineProps<{
 
 const router = useRouter()
 const dashboardStore = useDashboardStore()
+
+// Fixer status (derived from dashboard store)
+const fixerStore = computed(() => ({
+  isFixing: dashboardStore.fixerConfig.isFixing,
+  currentFixDir: dashboardStore.fixerConfig.currentFixDir,
+  currentFixIndex: dashboardStore.fixerConfig.currentFixIndex,
+  totalFixes: dashboardStore.fixerConfig.totalFixes,
+}))
 
 const showAddTask = ref(false)
 const newTaskTitle = ref('')
@@ -635,6 +651,7 @@ onMounted(async () => {
   // Poll scanner status every 5 seconds to show real-time active scans
   statusPollTimer = setInterval(() => {
     dashboardStore.fetchScannerStatus()
+    dashboardStore.fetchFixerConfig()
   }, 5000)
 
   // Poll tasks/reviews data every 10 seconds to auto-refresh when status changes
@@ -984,6 +1001,37 @@ onUnmounted(() => {
   background: #f59e0b;
   animation: pulse 1.5s ease-in-out infinite;
   flex-shrink: 0;
+}
+
+.fixer-active-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #1e40af;
+}
+
+.fixer-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  animation: pulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.fixer-current-dir {
+  font-weight: 600;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: bottom;
 }
 
 @keyframes pulse {

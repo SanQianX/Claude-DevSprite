@@ -21,10 +21,16 @@ export const useDashboardStore = defineStore('dashboard', () => {
     lastScanTime: null,
   })
 
-  const fixerConfig = ref<{ enabled: boolean; intervalMs: number; isFixing: boolean }>({
+  const fixerConfig = ref<{
+    enabled: boolean; intervalMs: number; isFixing: boolean;
+    currentFixDir: string | null; currentFixIndex: number; totalFixes: number;
+  }>({
     enabled: false,
-    intervalMs: 5 * 60 * 1000,
+    intervalMs: 30 * 60 * 1000,
     isFixing: false,
+    currentFixDir: null,
+    currentFixIndex: 0,
+    totalFixes: 0,
   })
 
   async function fetchTasks(projectName: string) {
