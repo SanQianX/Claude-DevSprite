@@ -188,12 +188,12 @@
           class="review-item"
           :class="{
             'review-item-expanded': selectedReviewId === review.id,
-            'review-item-fixing': fixerStore.isFixing && review.id === fixerStore.currentReviewId,
+            'review-item-fixing': isCurrentReviewFixing(review),
           }"
           @click="toggleReviewDetail(review.id)"
         >
           <!-- Fixing indicator bar -->
-          <div v-if="fixerStore.isFixing && review.id === fixerStore.currentReviewId" class="review-fixing-bar">
+          <div v-if="isCurrentReviewFixing(review)" class="review-fixing-bar">
             <div class="review-fixing-pulse"></div>
             <span class="review-fixing-text">
               修复中 [{{ fixerStore.currentFixIndex }}/{{ fixerStore.totalFixes }}]
@@ -289,6 +289,11 @@ const fixerStore = computed(() => ({
   totalFixes: dashboardStore.fixerConfig.totalFixes,
   currentReviewId: dashboardStore.fixerConfig.currentReviewId,
 }))
+
+// Helper function to check if a review is the one currently being fixed
+function isCurrentReviewFixing(review: Review): boolean {
+  return fixerStore.value.isFixing && review.id === fixerStore.value.currentReviewId
+}
 
 const showAddTask = ref(false)
 const newTaskTitle = ref('')
