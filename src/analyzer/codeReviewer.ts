@@ -298,7 +298,7 @@ export class CodeReviewer {
    *
    * **关于端点的说明:**
    * - 本方法仅用于生成修复内容，由 POST /reviews/:id/fix 路由调用。
-   * - 审核状态更新（approve/ignore）由 reviews.ts 和 dashboard.ts 中的
+   * - 审核状态更新（approve/ignore）由 reviews.ts 中的
    *   PUT /api/projects/:name/reviews/:id 端点处理，前端正在使用该端点。
    */
   async generateFix(
