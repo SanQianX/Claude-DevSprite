@@ -100,7 +100,6 @@ function loadEnvConfig(): AIConfig {
  * Handles communication with AI models by providing methods to call the AI backend.
  * This class focuses on the core responsibility of AI interaction.
  * The management of real-time WebSocket connections is delegated to a dedicated handler (e.g., wsHandler.ts).
- * Note: The POST /api/chat/send (SSE) endpoint is deprecated and not used by this class. This legacy endpoint is implemented in teams.ts and is not called by the frontend, which exclusively uses WebSocket for chat communication. For documentation, see FUNCTIONAL-LOGIC-ANALYSIS.md under the 'dead code and route conflicts' section.
  *
  * Git Hook Integration:
  * This AI provider is the core analysis engine invoked after a code commit is detected. The flow is:
