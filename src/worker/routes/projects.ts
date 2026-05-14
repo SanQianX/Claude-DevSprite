@@ -169,16 +169,6 @@ export function registerProjectRoutes(app: Express): void {
   }));
 
   /**
-   * GET /api/projects/:name/tree
-   * Get project file tree structure
-   * Note: This is now handled by files.ts, but we keep a redirect for compatibility
-   */
-  app.get('/api/projects/:name/tree', (req: Request, res: Response, next: Function) => {
-    // Forward to the files route handler
-    next('route');
-  });
-
-  /**
    * GET /api/filesystem/drives
    * Get list of system disk drives
    * Returns: { drives: [{ letter, label, free, total }] }
