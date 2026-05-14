@@ -318,8 +318,9 @@ export function registerConfigRoutes(app: Express): void {
     };
 
     const merged = Object.keys(override).length > 0 ? deepMerge(baseConfig, override) : baseConfig;
-    // Ensure ai section always has latest values from loadAIConfig
+    // Ensure ai and sync sections always have masked/safe values from baseConfig
     merged.ai = baseConfig.ai;
+    merged.sync = baseConfig.sync;
     res.json(merged);
   });
 

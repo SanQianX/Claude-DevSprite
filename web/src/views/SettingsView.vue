@@ -252,7 +252,7 @@
       </div>
 
       <!-- Remote Sync Config -->
-      <div v-if="activeTab === 'sync'" class="tab-panel" data-testid="tab-remote-sync">
+      <div v-if="activeTab === 'sync'" class="tab-panel" data-testid="tab-remote-sync-panel">
         <div class="section">
           <h3 class="section-title">Remote Sync</h3>
           <p class="section-desc">
