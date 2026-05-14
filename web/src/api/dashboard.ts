@@ -68,29 +68,10 @@ export const dashboardApi = {
     ))
   },
 
-  async createReview(projectName: string, review: {
-    title: string
-    severity?: string
-    location?: string
-    suggestion?: string
-    source?: string
-  }): Promise<Review> {
-    return unwrap(apiClient.post<Review>(
-      `/projects/${encodeURIComponent(projectName)}/reviews`,
-      review
-    ))
-  },
-
   async updateReview(projectName: string, reviewId: number, updates: Partial<Review>): Promise<void> {
     await unwrap(apiClient.put(
       `/projects/${encodeURIComponent(projectName)}/reviews/${reviewId}`,
       updates as Record<string, unknown>
-    ))
-  },
-
-  async deleteReview(projectName: string, reviewId: number): Promise<void> {
-    await unwrap(apiClient.delete(
-      `/projects/${encodeURIComponent(projectName)}/reviews/${reviewId}`
     ))
   },
 

@@ -118,38 +118,6 @@ export function registerDashboardRoutes(app: Express): void {
   }));
 
   /**
-   * POST /api/projects/:name/reviews
-   * Create a new review item
-   */
-  app.post('/api/projects/:name/reviews', asyncHandler(async (req: Request, res: Response) => {
-    const projectName = req.params.name;
-    const db = await getDatabase();
-    const project = db.getProject(projectName);
-    if (!project) throw createError('Project not found', 404);
-
-    const { title, severity, location, suggestion, source } = req.body;
-    if (!title) throw createError('Title is required', 400);
-
-    const review = db.createReview({
-      project_id: project.id,
-      title,
-      severity: severity || 'LOW',
-      location: location || null,
-      suggestion: suggestion || null,
-      source: source || 'manual',
-      status: 'pending',
-      commit_hash: null,
-      file_path: null,
-      line: null,
-      category: null,
-      description: null,
-    });
-
-    logger.info(`Review created: ${title} for project ${projectName}`);
-    res.status(201).json(review);
-  }));
-
-  /**
    * PUT /api/projects/:name/reviews/:id
    * Update a review (approve, ignore, etc.)
    */
@@ -173,18 +141,4 @@ export function registerDashboardRoutes(app: Express): void {
     res.json({ success: true });
   }));
 
-  /**
-   * DELETE /api/projects/:name/reviews/:id
-   * Delete a review
-   */
-  app.delete('/api/projects/:name/reviews/:id', asyncHandler(async (req: Request, res: Response) => {
-    const reviewId = parseInt(req.params.id, 10);
-    if (isNaN(reviewId)) throw createError('Invalid review ID', 400);
-    const db = await getDatabase();
-    const review = db.getReview(reviewId);
-    if (!review) throw createError('Review not found', 404);
-
-    db.deleteReview(reviewId);
-    res.json({ success: true });
-  }));
 }
