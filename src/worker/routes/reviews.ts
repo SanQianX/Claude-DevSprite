@@ -265,6 +265,21 @@ export function registerReviewRoutes(app: Express): void {
             status: 'confirmed',
             resolved_at: new Date().toISOString(),
           });
+
+          // Auto-create task for confirmed review (sync with dashboard)
+          try {
+            db.createTask({
+              project_id: review.project_id,
+              title: `Review confirmed: ${review.title}`,
+              description: review.description || review.title,
+              status: 'done',
+              priority: 'low',
+              estimated: null,
+            });
+          } catch (taskError: any) {
+            logger.error(`Failed to create task for review ${review.id}: ${taskError.message}`);
+          }
+
           results.push({ id: review.id, action: 'confirmed', title: review.title });
           confirmed++;
         } else {
@@ -358,6 +373,21 @@ export function registerReviewRoutes(app: Express): void {
         status: 'confirmed',
         resolved_at: new Date().toISOString(),
       });
+
+      // Auto-create task for confirmed review (sync with dashboard)
+      try {
+        db.createTask({
+          project_id: review.project_id,
+          title: `Review confirmed: ${review.title}`,
+          description: review.description || review.title,
+          status: 'done',
+          priority: 'low',
+          estimated: null,
+        });
+      } catch (taskError: any) {
+        logger.error(`Failed to create task for review ${id}: ${taskError.message}`);
+      }
+
       res.json({
         message: '问题已确认',
         explanation: `已标记为"已确认"。${review.file_path ? `文件 "${review.file_path}" 不存在或不是代码文件，` : ''}该问题涉及 ${review.category || '设计层面'}，需要手动处理。`,
