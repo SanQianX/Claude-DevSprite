@@ -302,6 +302,21 @@ export function registerReviewRoutes(app: Express): void {
 
           await fs.promises.writeFile(fullPath, fix.fixedContent, 'utf-8');
           db.updateReview(review.id, { status: 'fixed', resolved_at: new Date().toISOString() });
+
+          // Auto-create task for the fix (sync with dashboard)
+          try {
+            db.createTask({
+              project_id: review.project_id,
+              title: `Fix completed: ${review.title}`,
+              description: review.description || review.title,
+              status: 'done',
+              priority: 'low',
+              estimated: null,
+            });
+          } catch (taskError: any) {
+            logger.error(`Failed to create task for review ${review.id}: ${taskError.message}`);
+          }
+
           results.push({ id: review.id, action: 'fixed', title: review.title });
           fixed++;
         }
@@ -391,6 +406,20 @@ export function registerReviewRoutes(app: Express): void {
 
     // Mark review as fixed
     db.updateReview(id, { status: 'fixed', resolved_at: new Date().toISOString() });
+
+    // Auto-create task for the fix (sync with dashboard)
+    try {
+      db.createTask({
+        project_id: review.project_id,
+        title: `Fix completed: ${review.title}`,
+        description: review.description || review.title,
+        status: 'done',
+        priority: 'low',
+        estimated: null,
+      });
+    } catch (taskError: any) {
+      logger.error(`Failed to create task for review ${id}: ${taskError.message}`);
+    }
 
     res.json({
       message: '修复已应用',
