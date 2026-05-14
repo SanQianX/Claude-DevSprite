@@ -330,7 +330,7 @@ const taskGroups = reactive([
     expanded: true,
     get tasks() {
       // Tasks in progress + pending/approved reviews (awaiting action)
-      const taskInProgress = tasks.value.filter(t => t.status === 'progress')
+      const taskInProgress = tasks.value.filter(t => t.status === 'in_progress')
       const reviewsInProgress = reviews.value.filter(r => r.status === 'pending' || r.status === 'approved')
       return [...taskInProgress, ...reviewsInProgress]
     },
@@ -362,7 +362,7 @@ const completedCount = computed(() =>
   reviews.value.filter(r => r.status === 'fixed' || r.status === 'confirmed').length
 )
 const inProgressCount = computed(() =>
-  tasks.value.filter(t => t.status === 'progress').length +
+  tasks.value.filter(t => t.status === 'in_progress').length +
   reviews.value.filter(r => r.status === 'pending' || r.status === 'approved').length
 )
 const backlogCount = computed(() =>
@@ -572,7 +572,7 @@ async function handleDeleteTask(taskId: number) {
 
 function getStatusColor(status: string): string {
   if (status === 'done' || status === 'fixed' || status === 'confirmed') return 'green'
-  if (status === 'progress' || status === 'pending' || status === 'approved') return 'blue'
+  if (status === 'in_progress' || status === 'pending' || status === 'approved') return 'blue'
   return 'gray'
 }
 
