@@ -102,6 +102,16 @@ onUnmounted(() => {
 });
 
 function handleSend(content: string) {
+  // Intercept /task commands for in-chat task creation
+  if (content.trim().startsWith('/task ')) {
+    const projectName = route.params.projectName as string;
+    if (projectName) {
+      chatStore.handleTaskCommand(content, projectName);
+    } else {
+      chatStore.addSystemMessage('无法创建任务: 未指定项目');
+    }
+    return;
+  }
   chatStore.sendMessage(content);
 }
 

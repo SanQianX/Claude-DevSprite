@@ -7,6 +7,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { getWebSocketClient, type WsMessage, type ConnectionState } from '../api/websocket';
 import type { Session, SessionMessage } from '../types/session';
+import { dashboardApi } from '../api/dashboard';
 
 export interface ChatMessage {
   id: string;
@@ -367,6 +368,62 @@ export const useChatStore = defineStore('chat', () => {
     return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   }
 
+  // ─── /task Command ──────────────────────────────────────────────────────
+
+  const TASK_COMMAND_RE = /^\/task\s+(.+)/i;
+
+  function parseTaskCommand(content: string): { title: string; description?: string; priority?: string; status?: string } | null {
+    const match = content.trim().match(TASK_COMMAND_RE);
+    if (!match) return null;
+
+    let rest = match[1].trim();
+    const result: { title: string; description?: string; priority?: string; status?: string } = { title: '' };
+
+    // Extract --priority <value>
+    const priorityMatch = rest.match(/--priority\s+(high|medium|low|critical)/i);
+    if (priorityMatch) {
+      result.priority = priorityMatch[1].toLowerCase();
+      rest = rest.replace(/--priority\s+\S+/i, '').trim();
+    }
+
+    // Extract --status <value>
+    const statusMatch = rest.match(/--status\s+(backlog|todo|in_progress|review|done)/i);
+    if (statusMatch) {
+      result.status = statusMatch[1].toLowerCase();
+      rest = rest.replace(/--status\s+\S+/i, '').trim();
+    }
+
+    // Extract --desc <value> (optional description)
+    const descMatch = rest.match(/--desc\s+"([^"]+)"/i) || rest.match(/--desc\s+(\S+)/i);
+    if (descMatch) {
+      result.description = descMatch[1];
+      rest = rest.replace(/--desc\s+"[^"]*"/i, '').replace(/--desc\s+\S+/i, '').trim();
+    }
+
+    // Remaining text is the title
+    result.title = rest.replace(/\s+/g, ' ').trim();
+    return result.title ? result : null;
+  }
+
+  async function handleTaskCommand(content: string, projectName: string): Promise<boolean> {
+    const parsed = parseTaskCommand(content);
+    if (!parsed) return false;
+
+    try {
+      const task = await dashboardApi.createTask(projectName, {
+        title: parsed.title,
+        description: parsed.description,
+        priority: parsed.priority || 'medium',
+        status: parsed.status || 'backlog',
+      });
+      addSystemMessage(`任务已创建: #${task.id} ${task.title} (优先级: ${task.priority}, 状态: ${task.status})`);
+      return true;
+    } catch (err: any) {
+      addSystemMessage(`创建任务失败: ${err.message || '未知错误'}`);
+      return true; // still consumed the command
+    }
+  }
+
   return {
     // State
     messages,
@@ -396,5 +453,6 @@ export const useChatStore = defineStore('chat', () => {
     deleteSession,
     addSystemMessage,
     clearMessages,
+    handleTaskCommand,
   };
 });
