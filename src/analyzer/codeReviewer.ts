@@ -25,7 +25,6 @@ import { AIProvider, type AIConfig } from './aiProvider';
 import { DiffCollector } from './diffCollector';
 import { getDatabase } from '../worker/db';
 import { createLogger } from '../utils/logger';
-import { Request, Response, Router } from 'express'; // 新增：导入Express Router
 
 const logger = createLogger('code-reviewer');
 
@@ -392,82 +391,3 @@ export class CodeReviewer {
   }
 }
 
-/**
- * Create an Express router with all review-related API endpoints.
- * This function encapsulates the route definitions, aligning them with the design document.
- *
- * **路由说明:**
- * - **POST /reviews/:id/fix**: 已实现。调用 `CodeReviewer.generateFix` 方法，处理修复请求。
- * - **PUT /api/projects/:name/reviews/:id**: 由 reviews.ts 和 dashboard.ts 实现，
- *   用于更新审核状态（approve/ignore/fixed/confirmed），前端正在使用。
- *
- * **使用方式:**
- * 在主应用（如 src/worker/app.ts）中导入并挂载此路由器：
- * ```typescript
- * import { CodeReviewer } from '../analyzer/codeReviewer';
- * import { createReviewsRouter } from '../analyzer/codeReviewer'; // 或从此处导出
- *
- * const reviewer = new CodeReviewer();
- * const reviewsRouter = createReviewsRouter(reviewer);
- * app.use('/api', reviewsRouter); // 挂载后，端点路径变为 /api/reviews/:id/fix
- * ```
- */
-export function createReviewsRouter(reviewer: CodeReviewer): Router {
-  const router = Router();
-
-  // POST /reviews/:id/fix
-  router.post('/reviews/:id/fix', async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const reviewId = parseInt(id, 10);
-
-    if (isNaN(reviewId)) {
-      return res.status(400).json({ error: 'Invalid review ID' });
-    }
-
-    try {
-      const db = await getDatabase();
-      const review = db.getReview(reviewId);
-
-      if (!review) {
-        return res.status(404).json({ error: 'Review not found' });
-      }
-
-      // Get the project to obtain its path
-      const project = db.getProjectById(review.project_id);
-      if (!project) {
-        return res.status(404).json({ error: 'Project not found for this review' });
-      }
-
-      const fixResult = await reviewer.generateFix(
-        project.path,
-        review.file_path!,
-        {
-          title: review.title,
-          description: review.description || review.title,
-          suggestion: review.suggestion || undefined,
-        },
-        reviewId
-      );
-
-      if (!fixResult) {
-        return res.status(500).json({ error: 'Failed to generate fix. The file might not exist or be too large.' });
-      }
-
-      // The status has already been updated to 'fixed' inside generateFix
-      res.json({
-        success: true,
-        fix: fixResult,
-        review: { id: reviewId, status: 'fixed' },
-      });
-    } catch (error: any) {
-      logger.error(`[Fix Route] Error processing fix for review ${id}:`, error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
-
-  // 注意：审核状态更新（approve/ignore）由 reviews.ts 和 dashboard.ts 中的
-  // PUT /api/projects/:name/reviews/:id 端点处理，前端正在使用该端点。
-  // 本路由器仅负责 POST /reviews/:id/fix 端点。
-
-  return router;
-}
