@@ -13,7 +13,7 @@ import { asyncHandler, createError } from '../middleware/errorHandler';
 import { getDatabase } from '../db';
 import { getSharedReviewer, resetSharedReviewer } from '../../analyzer/codeReviewer';
 import { getSharedScanner, resetSharedScanner } from '../../analyzer/designScanner';
-import { AgentFixer } from '../../analyzer/agentFixer';
+import { getSharedFixer, resetSharedFixer } from '../../analyzer/agentFixer';
 import type { AIConfig } from '../../analyzer/aiProvider';
 import { createLogger } from '../../utils/logger';
 
@@ -31,8 +31,6 @@ function loadConfigOverride(): Record<string, any> {
   }
   return {};
 }
-
-let fixer: AgentFixer | null = null;
 
 /**
  * Build an isolated AIConfig from per-agent settings in config.json.
@@ -54,11 +52,8 @@ function getReviewer() {
   return getSharedReviewer();
 }
 
-function getFixer(): AgentFixer {
-  if (!fixer) {
-    fixer = new AgentFixer({ fixIntervalMs: 30 * 60 * 1000 }); // 30 minutes
-  }
-  return fixer;
+function getFixer() {
+  return getSharedFixer({ fixIntervalMs: 30 * 60 * 1000 });
 }
 
 /**
@@ -68,7 +63,7 @@ function getFixer(): AgentFixer {
 export function resetAgentSingletons(): void {
   resetSharedReviewer();
   resetSharedScanner();
-  fixer = null;
+  resetSharedFixer();
 }
 
 export function registerScannerConfigRoutes(app: Express): void {

@@ -663,3 +663,24 @@ export class AgentFixer {
     }
   }
 }
+
+/**
+ * Shared singleton fixer instance.
+ * All modules (worker/index.ts, reviews.ts, etc.) must use this
+ * to ensure the background fixer is shared.
+ */
+let _sharedFixer: AgentFixer | null = null;
+
+export function getSharedFixer(options?: { fixIntervalMs?: number }): AgentFixer {
+  if (!_sharedFixer) {
+    _sharedFixer = new AgentFixer(options);
+  }
+  return _sharedFixer;
+}
+
+export function resetSharedFixer(): void {
+  if (_sharedFixer) {
+    _sharedFixer.stopFixer();
+    _sharedFixer = null;
+  }
+}

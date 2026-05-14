@@ -7,6 +7,7 @@ import { startServer } from './server';
 import { logger } from '../utils/logger';
 import { getSharedScanner } from '../analyzer/designScanner';
 import { getSharedReviewer } from '../analyzer/codeReviewer';
+import { getSharedFixer } from '../analyzer/agentFixer';
 
 import { closeDatabase } from './db';
 
@@ -50,6 +51,11 @@ export async function startWorker(): Promise<void> {
     const reviewer = getSharedReviewer({ scanIntervalMs: 5 * 60 * 1000 });
     reviewer.startScanner();
     logger.info('Code reviewer scanner started');
+
+    // Start background agent fixer (disabled by default, enabled via dashboard)
+    const fixer = getSharedFixer();
+    fixer.startFixer();
+    logger.info('Agent fixer initialized (disabled by default)');
 
   } catch (error) {
     logger.error('Failed to start worker', error);
