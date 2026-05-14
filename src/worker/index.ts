@@ -6,6 +6,7 @@
 import { startServer } from './server';
 import { logger } from '../utils/logger';
 import { getSharedScanner } from '../analyzer/designScanner';
+import { getSharedReviewer } from '../analyzer/codeReviewer';
 import { AgentFixer } from '../analyzer/agentFixer';
 import { closeDatabase } from './db';
 
@@ -44,6 +45,11 @@ export async function startWorker(): Promise<void> {
     const scanner = getSharedScanner({ scanIntervalMs: 10 * 60 * 1000 });
     scanner.startScanner();
     logger.info('Design scanner agent started');
+
+    // Start background code reviewer scanner (auto-reviews new commits)
+    const reviewer = getSharedReviewer({ scanIntervalMs: 5 * 60 * 1000 });
+    reviewer.startScanner();
+    logger.info('Code reviewer scanner started');
 
     // Start background fixer agent (fixes pending issues via Claude Code CLI, default disabled)
     const fixer = new AgentFixer({ fixIntervalMs: 30 * 60 * 1000 });

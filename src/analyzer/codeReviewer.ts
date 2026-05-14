@@ -391,3 +391,24 @@ export class CodeReviewer {
   }
 }
 
+/**
+ * Shared singleton reviewer instance.
+ * All modules (worker/index.ts, reviews.ts, etc.) must use this
+ * to ensure the background scanner and AI provider are shared.
+ */
+let _sharedReviewer: CodeReviewer | null = null;
+
+export function getSharedReviewer(options?: { model?: string; scanIntervalMs?: number; agentConfig?: AIConfig }): CodeReviewer {
+  if (!_sharedReviewer) {
+    _sharedReviewer = new CodeReviewer(options);
+  }
+  return _sharedReviewer;
+}
+
+export function resetSharedReviewer(): void {
+  if (_sharedReviewer) {
+    _sharedReviewer.stopScanner();
+    _sharedReviewer = null;
+  }
+}
+

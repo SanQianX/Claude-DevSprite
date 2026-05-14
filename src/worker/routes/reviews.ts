@@ -11,7 +11,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { getDatabase } from '../db';
-import { CodeReviewer } from '../../analyzer/codeReviewer';
+import { getSharedReviewer, resetSharedReviewer } from '../../analyzer/codeReviewer';
 import { getSharedScanner, resetSharedScanner } from '../../analyzer/designScanner';
 import { AgentFixer } from '../../analyzer/agentFixer';
 import type { AIConfig } from '../../analyzer/aiProvider';
@@ -32,7 +32,6 @@ function loadConfigOverride(): Record<string, any> {
   return {};
 }
 
-let reviewer: CodeReviewer | null = null;
 let fixer: AgentFixer | null = null;
 
 /**
@@ -51,11 +50,8 @@ function buildAgentConfig(agentKey: 'scanner' | 'fixer'): AIConfig | undefined {
   };
 }
 
-function getReviewer(): CodeReviewer {
-  if (!reviewer) {
-    reviewer = new CodeReviewer();
-  }
-  return reviewer;
+function getReviewer() {
+  return getSharedReviewer();
 }
 
 function getFixer(): AgentFixer {
@@ -70,7 +66,7 @@ function getFixer(): AgentFixer {
  * Call this after saving AI config.
  */
 export function resetAgentSingletons(): void {
-  reviewer = null;
+  resetSharedReviewer();
   resetSharedScanner();
   fixer = null;
 }
