@@ -38,6 +38,10 @@ export default {
     deleteFailed: 'Failed to remove project',
     drive: 'Drive',
     noFilesYet: 'No files yet, analysis will generate documents',
+    searchPlaceholder: 'Search projects...',
+    allStatus: 'All Status',
+    normal: 'Normal',
+    noResults: 'No matching projects found',
   },
   project: {
     repoType: 'Repo Type',

@@ -10,6 +10,25 @@
       <div class="project-section">
         <div class="section-header">
           <div class="section-title">{{ t('home.title') }}</div>
+          <div class="section-filters">
+            <div class="search-box">
+              <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M11.742 10.344a6.5 6.5 0 10-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 001.415-1.414l-3.85-3.85a1.007 1.007 0 00-.115-.1zM12 6.5a5.5 5.5 0 11-11 0 5.5 5.5 0 0111 0z"/>
+              </svg>
+              <input
+                v-model="searchQuery"
+                type="text"
+                class="search-input"
+                :placeholder="t('home.searchPlaceholder') || 'Search projects...'"
+              />
+            </div>
+            <select v-model="statusFilter" class="status-select">
+              <option value="all">{{ t('home.allStatus') || 'All Status' }}</option>
+              <option value="analyzing">{{ t('project.analyzing') || 'Analyzing' }}</option>
+              <option value="failed">{{ t('project.failed') || 'Failed' }}</option>
+              <option value="normal">{{ t('home.normal') || 'Normal' }}</option>
+            </select>
+          </div>
           <div class="section-actions">
             <button class="btn btn-secondary" @click="fetchProjects">
               {{ t('common.refresh') }}
@@ -40,7 +59,7 @@
             </button>
           </div>
 
-          <table v-else class="project-table">
+          <table v-else-if="filteredProjects.length > 0" class="project-table">
             <thead>
               <tr>
                 <th style="width:32%">{{ t('home.title') }}</th>
@@ -53,13 +72,17 @@
             </thead>
             <tbody>
               <ProjectCard
-                v-for="project in projects"
+                v-for="project in filteredProjects"
                 :key="project.name"
                 :project="project"
                 @deleted="fetchProjects"
               />
             </tbody>
           </table>
+
+          <div v-else class="empty-container">
+            <p class="no-results">{{ t('home.noResults') || 'No matching projects found' }}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -76,9 +99,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useProjectsStore } from '@/stores/projects'
+import { useAnalysisStore } from '@/stores/analysis'
 import { useUIStore } from '@/stores/ui'
 import ProjectCard from '@/components/home/ProjectCard.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -89,11 +113,42 @@ import ConsolePanel from '@/components/home/ConsolePanel.vue'
 import AddProjectModal from '@/components/home/AddProjectModal.vue'
 
 const projectsStore = useProjectsStore()
+const analysisStore = useAnalysisStore()
 const { projects, loading, error } = storeToRefs(projectsStore)
 const { fetchProjects } = projectsStore
+const { progress } = storeToRefs(analysisStore)
 const { t } = storeToRefs(useUIStore())
 
 const showAddModal = ref(false)
+const searchQuery = ref('')
+const statusFilter = ref('all')
+
+const filteredProjects = computed(() => {
+  let result = projects.value
+
+  // Filter by search query
+  if (searchQuery.value.trim()) {
+    const query = searchQuery.value.toLowerCase()
+    result = result.filter(p => p.name.toLowerCase().includes(query))
+  }
+
+  // Filter by status
+  if (statusFilter.value !== 'all') {
+    result = result.filter(p => {
+      const isAnalyzing = progress.value.status === 'running' && progress.value.projectName === p.name
+      const isFailed = progress.value.status === 'failed' && progress.value.projectName === p.name
+
+      switch (statusFilter.value) {
+        case 'analyzing': return isAnalyzing
+        case 'failed': return isFailed
+        case 'normal': return !isAnalyzing && !isFailed
+        default: return true
+      }
+    })
+  }
+
+  return result
+})
 
 function onProjectAdded() {
   fetchProjects()
@@ -145,6 +200,67 @@ onMounted(() => {
 .section-actions {
   display: flex;
   gap: 8px;
+}
+
+.section-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.search-box:focus-within {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+}
+
+.search-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.search-input {
+  border: none;
+  outline: none;
+  font-size: 13px;
+  background: transparent;
+  width: 160px;
+  color: #1e293b;
+}
+
+.search-input::placeholder {
+  color: #94a3b8;
+}
+
+.status-select {
+  padding: 5px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: #1e293b;
+  cursor: pointer;
+}
+
+.status-select:focus {
+  border-color: #22c55e;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+}
+
+.no-results {
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
 }
 
 .btn {

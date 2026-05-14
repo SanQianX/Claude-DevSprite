@@ -38,6 +38,10 @@ export default {
     deleteFailed: '删除项目失败',
     drive: '磁盘驱动器',
     noFilesYet: '暂无文件，分析后将生成文档',
+    searchPlaceholder: '搜索项目...',
+    allStatus: '全部状态',
+    normal: '正常',
+    noResults: '未找到匹配的项目',
   },
   project: {
     repoType: '仓库类型',
