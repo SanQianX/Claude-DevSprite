@@ -169,8 +169,9 @@ ${reviewList}
 ## 项目信息
 - **项目路径**: ${projectPath}
 - **修复目录**: 当前目录
+- **服务地址**: http://127.0.0.1:38888
 
-## 你的工作流
+## 你的工作流（严格按顺序执行）
 
 ### 第 1 步：阅读任务描述
 读取当前目录的 \`task.md\`，了解要修复的问题。
@@ -180,29 +181,94 @@ ${reviewList}
 2. 使用 Grep 搜索相关的函数调用、引用、测试
 3. 使用 Read 阅读相关文件，理解上下文
 4. 确认问题的存在和影响范围
+5. 判断问题是前端（Vue/TS）还是后端（Node.js/API）
 
-### 第 3 步：应用修复
+### 第 3 步：修复前测试（验证 Bug 存在）
+
+**如果是前端问题（.vue/.ts 文件在 web/src/ 下）：**
+1. 确保服务正在运行（http://127.0.0.1:38888）
+2. 使用 Bash 运行 Playwright 测试脚本：
+   - 打开相关页面
+   - 模拟用户操作（点击、输入、选择）
+   - 记录实际行为（与预期不符）
+   - 截图保存为 \`before-fix.png\`
+3. 将测试脚本保存为 \`test-before.js\`
+
+**如果是后端问题（.ts 文件在 src/ 下）：**
+1. 使用 Bash 运行 curl 测试：
+   - 调用相关 API 端点
+   - 记录实际响应（与预期不符）
+   - 保存测试脚本为 \`test-before.sh\`
+
+### 第 4 步：应用修复
 1. 根据 task.md 中的修复建议，修改代码
 2. 确保修复不会引入新问题
 3. 保持代码风格一致
+4. 如果是前端改动，重新构建：\`cd ${projectPath}/web && npm run build\`
+5. 如果是后端改动，重新构建：\`cd ${projectPath} && npm run build\`
+6. 重启服务：\`cd ${projectPath} && node dev-scripts/daemon.js restart\`
 
-### 第 4 步：验证修复
-1. 检查修改后的代码语法是否正确
-2. 搜索是否有遗漏的引用需要更新
-3. 确认修复完整
+### 第 5 步：修复后测试（验证修复有效）
 
-### 第 5 步：写入修复记录
-在当前目录写入以下文件：
-- \`fix-applied.md\` — 修复内容、修改的文件、修改说明
-- \`test-result.md\` — 验证结果、测试过程
+**如果是前端问题：**
+1. 使用 Bash 运行 Playwright 测试脚本：
+   - 打开相同页面
+   - 执行相同操作
+   - 验证预期行为（应该与修复前不同）
+   - 截图保存为 \`after-fix.png\`
+2. 将测试脚本保存为 \`test-after.js\`
+3. 如果测试不通过，回到第 4 步继续修复，直到通过
 
-### 第 6 步：退出
+**如果是后端问题：**
+1. 使用 Bash 运行相同的 curl 测试
+2. 验证响应符合预期
+3. 如果测试不通过，回到第 4 步继续修复，直到通过
+
+### 第 6 步：写入修复文档（5 个文件）
+
+在当前目录写入以下文件，遵循 BUG-FIX-TEMPLATE 格式：
+
+#### 01-ui-analysis.md（UI 控件分析）
+- 组件结构图
+- 控件清单表格
+- 数据流分析
+- 交互流程
+
+#### 02-code-review.md（代码审查）
+- 关键代码段
+- 审查检查清单
+- 发现的问题
+
+#### 03-bug-discovery.md（问题发现）
+- 发现时间和方式
+- 问题描述
+- 排查步骤（含代码证据）
+- 根本原因
+- 影响范围
+
+#### 04-fix-implementation.md（修复实现）
+- 修复方案
+- 修改前代码 vs 修改后代码
+- 文件变更清单
+
+#### 05-ui-testing.md（测试验证）
+- 测试环境
+- 修复前测试结果（含截图引用 \`before-fix.png\`）
+- 修复后测试结果（含截图引用 \`after-fix.png\`）
+- 测试结果对比表
+- 测试结论
+
+### 第 7 步：退出
 修复完成后退出，不要做其他事情。
 
 ## 重要规则
 - 只修复 task.md 中描述的问题，不要做其他改动
 - 修改代码时保持原有风格
-- 如果问题无法修复（如文件不存在），在 fix-applied.md 中说明原因
+- **必须运行真实测试**，不能只写静态文档声称修复
+- **前端问题必须用 Playwright 截图**，后端问题必须用 curl 验证
+- **测试不通过必须继续修复**，直到真正解决
+- 如果问题无法修复（如文件不存在），在 03-bug-discovery.md 中说明原因
+- 截图文件（*.png）也要保存在当前目录
 \`\`\`
 
 4. 完成后，将汇总写入 fixtasks/findings.json:
@@ -234,7 +300,15 @@ ${reviewList}
 // ─── Level 2: Worker Prompt ──────────────────────────────────────────────────
 
 function buildWorkerPrompt(): string {
-  return `请阅读当前目录的 CLAUDE.md 和 task.md，按照工作指南修复问题。`;
+  return `请阅读当前目录的 CLAUDE.md 和 task.md，严格按照工作指南修复问题。
+
+重要提醒：
+1. 必须先运行修复前测试（Playwright 或 curl），截图保存
+2. 应用修复后必须重新构建和重启服务
+3. 必须运行修复后测试，验证问题已解决
+4. 测试不通过必须继续修复，直到通过
+5. 生成 5 个标准文档文件（01-05）
+6. 截图文件（*.png）保存在当前目录`;
 }
 
 // ─── AgentFixer Class ────────────────────────────────────────────────────────
@@ -624,7 +698,7 @@ export class AgentFixer {
         return;
       }
 
-      // Stage modified files (code changes made by the worker)
+      // Stage code changes (modified files)
       const codeExts = new Set(['.ts', '.tsx', '.js', '.jsx', '.vue', '.css', '.scss']);
       for (const file of status.modified) {
         const ext = path.extname(file);
@@ -632,11 +706,22 @@ export class AgentFixer {
           await git.add(file);
         }
       }
+
+      // Stage new files: code + fixtask documentation
+      const stageExts = new Set(['.ts', '.tsx', '.js', '.jsx', '.vue', '.css', '.scss', '.md', '.png', '.sh']);
       for (const file of status.not_added) {
         const ext = path.extname(file);
-        if (codeExts.has(ext)) {
+        if (stageExts.has(ext)) {
           await git.add(file);
         }
+      }
+
+      // Also stage the fixtask directory (documentation, screenshots, test scripts)
+      const fixDirRel = path.relative(projectPath, fixDir);
+      try {
+        await git.add(`${fixDirRel}/`);
+      } catch {
+        // Directory may not exist or be empty — non-fatal
       }
 
       // Check if anything was staged after our selective add
