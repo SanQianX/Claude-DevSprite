@@ -648,6 +648,20 @@ onMounted(async () => {
   wsClient.on('dashboard.reviews.updated', handleDashboardUpdate)
   wsClient.on('dashboard.data.updated', handleDashboardUpdate)
   wsClient.on('stateChange', handleWsStateChange)
+
+  // Watch scanner status: when scan finishes, refresh dashboard data immediately
+  watch(() => dashboardStore.scannerConfig.isScanning, (wasScanning, isScanning) => {
+    if (wasScanning && !isScanning) {
+      dashboardStore.fetchAll(props.projectName)
+    }
+  })
+
+  // Watch last scan time: when a new scan completes, refresh dashboard data
+  watch(() => dashboardStore.scannerStatus.lastScanTime, (newTime, oldTime) => {
+    if (newTime && newTime !== oldTime) {
+      dashboardStore.fetchAll(props.projectName)
+    }
+  })
 })
 
 onUnmounted(() => {
