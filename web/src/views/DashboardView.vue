@@ -202,7 +202,6 @@
                 {{ getFixButtonText(review) }}
               </button>
               <button class="btn btn-ignore" @click.stop="ignoreReview(review.id)">忽略</button>
-              <button class="btn btn-discuss" @click.stop="discussReview(review)">讨论</button>
               <button
                 class="btn btn-locate"
                 :disabled="!review.location"
@@ -482,17 +481,6 @@ function locateReview(review: Review) {
       code: filePath,
       line: lineNum?.toString() || '',
       panels: 'code,chat',
-    }
-  })
-}
-
-function discussReview(review: Review) {
-  router.push({
-    path: `/project/${props.projectName}`,
-    query: {
-      tab: 'workspace',
-      discuss: review.id.toString(),
-      panels: 'chat',
     }
   })
 }
@@ -1082,8 +1070,6 @@ onUnmounted(() => {
 .btn-ignore:hover { background: #fee2e2; }
 .btn-locate { background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe; }
 .btn-locate:hover { background: #ede9fe; }
-.btn-discuss { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
-.btn-discuss:hover { background: #dbeafe; }
 .btn-disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-disabled:hover { background: inherit; }
 
