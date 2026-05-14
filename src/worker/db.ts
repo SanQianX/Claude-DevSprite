@@ -627,19 +627,6 @@ export class DatabaseManager {
     return this.queryOne('SELECT * FROM reviews WHERE id = ?', [id]) as Review | undefined;
   }
 
-  createReview(review: Omit<Review, 'id' | 'created_at' | 'updated_at' | 'resolved_at'>): Review {
-    const now = new Date().toISOString();
-    this.run(
-      `INSERT INTO reviews (project_id, title, severity, location, suggestion, source, status, commit_hash, file_path, line, category, description, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [review.project_id, review.title, review.severity, review.location || null, review.suggestion || null, review.source || 'ai', review.status, review.commit_hash || null, review.file_path || null, review.line || null, review.category || null, review.description || null, now, now]
-    );
-    const row = this.queryOne('SELECT last_insert_rowid() as id');
-    const id = row ? row.id : 0;
-    this.save();
-    return { ...review, id, created_at: now, updated_at: now, resolved_at: null };
-  }
-
   updateReview(id: number, updates: Partial<Review>): void {
     const ALLOWED = new Set(['title', 'severity', 'location', 'suggestion', 'source', 'status', 'commit_hash', 'file_path', 'line', 'category', 'description', 'resolved_at']);
     const fields = Object.keys(updates).filter(k => k !== 'id' && ALLOWED.has(k));
@@ -647,11 +634,6 @@ export class DatabaseManager {
     const setClause = fields.map(f => `${f} = ?`).join(', ');
     const values = fields.map(f => (updates as Record<string, unknown>)[f]);
     this.run(`UPDATE reviews SET ${setClause}, updated_at = ? WHERE id = ?`, [...values, new Date().toISOString(), id]);
-    this.save();
-  }
-
-  deleteReview(id: number): void {
-    this.run('DELETE FROM reviews WHERE id = ?', [id]);
     this.save();
   }
 
@@ -713,7 +695,7 @@ export class DatabaseManager {
 
   /**
    * Batch create reviews inside a transaction (used by codeReviewer/designChecker)
-   * Uses raw run() instead of createReview() to avoid save() calling db.export()
+   * Uses raw run() to avoid save() calling db.export()
    * which interferes with the active SQL transaction in sql.js.
    */
   createReviewsBatch(reviews: Array<Omit<Review, 'id' | 'created_at' | 'updated_at' | 'resolved_at'>>): void {
