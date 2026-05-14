@@ -5,8 +5,8 @@
 
 import { startServer } from './server';
 import { logger } from '../utils/logger';
-import { DesignScanner } from '../analyzer/designScanner';
-import { DesignFixer } from '../analyzer/designFixer';
+import { getSharedScanner } from '../analyzer/designScanner';
+import { AgentFixer } from '../analyzer/agentFixer';
 import { closeDatabase } from './db';
 
 // Catch unhandled promise rejections to prevent crash
@@ -41,14 +41,14 @@ export async function startWorker(): Promise<void> {
     await startServer();
 
     // Start background scanner agent (finds issues only)
-    const scanner = new DesignScanner({ scanIntervalMs: 10 * 60 * 1000 });
+    const scanner = getSharedScanner({ scanIntervalMs: 10 * 60 * 1000 });
     scanner.startScanner();
     logger.info('Design scanner agent started');
 
-    // Start background fixer agent (fixes pending issues, default disabled)
-    const fixer = new DesignFixer({ fixIntervalMs: 5 * 60 * 1000 });
-    // Fixer starts disabled — user enables it via dashboard/config
-    logger.info('Design fixer agent initialized (disabled by default)');
+    // Start background fixer agent (fixes pending issues via Claude Code CLI, default disabled)
+    const fixer = new AgentFixer({ fixIntervalMs: 30 * 60 * 1000 });
+    // AgentFixer starts disabled — user enables it via dashboard/config
+    logger.info('Agent fixer initialized (disabled by default)');
   } catch (error) {
     logger.error('Failed to start worker', error);
     process.exit(1);

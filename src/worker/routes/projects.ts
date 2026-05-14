@@ -13,6 +13,7 @@ import type { Express, Request, Response } from 'express';
 import { getProjectDiscoveryService } from '../../services/projectDiscovery';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { createLogger } from '../../utils/logger';
+import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -124,6 +125,22 @@ export function registerProjectRoutes(app: Express): void {
     try {
       const projectDiscovery = getProjectDiscoveryService();
       const project = await projectDiscovery.addProject(projectPath);
+
+      // Create .claude-devsprite/scanteaks/ directory for agent scanner
+      const scanteaksDir = path.join(projectPath, '.claude-devsprite', 'scanteaks');
+      try {
+        fs.mkdirSync(scanteaksDir, { recursive: true });
+      } catch {
+        // Directory may already exist or path may be invalid — non-fatal
+      }
+
+      // Create .claude-devsprite/fixtasks/ directory for agent fixer
+      const fixtasksDir = path.join(projectPath, '.claude-devsprite', 'fixtasks');
+      try {
+        fs.mkdirSync(fixtasksDir, { recursive: true });
+      } catch {
+        // Directory may already exist or path may be invalid — non-fatal
+      }
 
       res.json(project);
     } catch (error) {

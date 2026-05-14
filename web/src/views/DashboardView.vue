@@ -106,6 +106,19 @@
             <button class="scan-btn" :disabled="scanning" @click="startScan">
               {{ scanning ? scanStatusText : '开始扫描' }}
             </button>
+            <!-- Active scan indicator -->
+            <div v-if="activeScanProjects.length > 0" class="scan-active-bar">
+              <div class="scan-pulse"></div>
+              <span class="scan-active-text">
+                正在扫描:
+                <span v-for="(p, i) in activeScanProjects" :key="p.projectId" class="scan-active-project">
+                  {{ p.projectName }}<span class="scan-elapsed">({{ formatElapsed(p.startedAt) }})</span>{{ i < activeScanProjects.length - 1 ? ', ' : '' }}
+                </span>
+              </span>
+            </div>
+            <div v-else-if="lastScanTimeText" class="scan-last-time">
+              上次扫描: {{ lastScanTimeText }}
+            </div>
             <span class="scan-divider"></span>
             <label class="scan-toggle">
               <input type="checkbox" v-model="autoFixerEnabled" @change="toggleAutoFixer" />
@@ -228,7 +241,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
 import { analysisApi } from '@/api/analysis'
@@ -260,6 +273,23 @@ const autoScanEnabled = ref(true)
 const scanIntervalMinutes = ref(10)
 const autoFixerEnabled = ref(false)
 const fixerIntervalMinutes = ref(5)
+
+// Scanner status polling
+let statusPollTimer: ReturnType<typeof setInterval> | null = null
+const activeScanProjects = computed(() => dashboardStore.scannerStatus.activeProjects)
+const lastScanTimeText = computed(() => {
+  const t = dashboardStore.scannerStatus.lastScanTime
+  if (!t) return ''
+  return formatTime(new Date(t).toISOString())
+})
+
+function formatElapsed(startedAt: number): string {
+  const seconds = Math.floor((Date.now() - startedAt) / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const remainSeconds = seconds % 60
+  return `${minutes}m${remainSeconds}s`
+}
 
 const projectColor = ref('#f97316')
 const projectPath = ref('')
@@ -548,7 +578,7 @@ onMounted(async () => {
 
   // Fetch tasks, reviews, scanner config, and fixer config from API
   await dashboardStore.fetchAll(props.projectName)
-  await Promise.all([dashboardStore.fetchScannerConfig(), dashboardStore.fetchFixerConfig()])
+  await Promise.all([dashboardStore.fetchScannerConfig(), dashboardStore.fetchFixerConfig(), dashboardStore.fetchScannerStatus()])
   autoScanEnabled.value = dashboardStore.scannerConfig.enabled
   scanIntervalMinutes.value = Math.round(dashboardStore.scannerConfig.intervalMs / 60000)
   autoFixerEnabled.value = dashboardStore.fixerConfig.enabled
@@ -557,6 +587,18 @@ onMounted(async () => {
   // Restore scanning state from backend
   if (dashboardStore.scannerConfig.isScanning) {
     scanning.value = true
+  }
+
+  // Poll scanner status every 5 seconds to show real-time active scans
+  statusPollTimer = setInterval(() => {
+    dashboardStore.fetchScannerStatus()
+  }, 5000)
+})
+
+onUnmounted(() => {
+  if (statusPollTimer) {
+    clearInterval(statusPollTimer)
+    statusPollTimer = null
   }
 })
 </script>
@@ -818,6 +860,51 @@ onMounted(async () => {
   height: 20px;
   background: #e2e8f0;
   margin: 0 4px;
+}
+
+.scan-active-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #92400e;
+}
+
+.scan-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  animation: pulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.scan-active-text {
+  font-weight: 500;
+}
+
+.scan-active-project {
+  font-weight: 600;
+}
+
+.scan-elapsed {
+  font-weight: 400;
+  color: #b45309;
+  margin-left: 2px;
+}
+
+.scan-last-time {
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 .analyze-btn {

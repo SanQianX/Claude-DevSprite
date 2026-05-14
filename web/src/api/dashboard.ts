@@ -120,6 +120,14 @@ export const dashboardApi = {
     ))
   },
 
+  async getScannerStatus(): Promise<{
+    enabled: boolean; intervalMs: number; isScanning: boolean;
+    activeProjects: Array<{ projectId: string; projectName: string; scanDir: string; startedAt: number }>;
+    lastScanTime: number | null;
+  }> {
+    return unwrap(apiClient.get('/scanner/status'))
+  },
+
   async updateScannerConfig(config: { enabled?: boolean; intervalMs?: number }): Promise<{ config: { enabled: boolean; intervalMs: number; isScanning: boolean } }> {
     return unwrap(apiClient.put<{ config: { enabled: boolean; intervalMs: number; isScanning: boolean } }>(
       '/scanner/config',

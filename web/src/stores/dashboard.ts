@@ -13,6 +13,14 @@ export const useDashboardStore = defineStore('dashboard', () => {
     isScanning: false,
   })
 
+  const scannerStatus = ref<{
+    activeProjects: Array<{ projectId: string; projectName: string; scanDir: string; startedAt: number }>;
+    lastScanTime: number | null;
+  }>({
+    activeProjects: [],
+    lastScanTime: null,
+  })
+
   const fixerConfig = ref<{ enabled: boolean; intervalMs: number; isFixing: boolean }>({
     enabled: false,
     intervalMs: 5 * 60 * 1000,
@@ -68,16 +76,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
     tasks.value = tasks.value.filter(t => t.id !== taskId)
   }
 
-  async function approveReview(projectName: string, reviewId: number) {
-    await dashboardApi.updateReview(projectName, reviewId, { status: 'approved' })
-    const review = reviews.value.find(r => r.id === reviewId)
-    if (review) {
-      review.status = 'approved'
-      review.resolved_at = new Date().toISOString()
-    }
-    await fetchTasks(projectName)
-  }
-
   async function fixReview(projectName: string, reviewId: number) {
     const result = await dashboardApi.fixReview(reviewId)
     const review = reviews.value.find(r => r.id === reviewId)
@@ -124,6 +122,24 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
   }
 
+  async function fetchScannerStatus() {
+    try {
+      const status = await dashboardApi.getScannerStatus()
+      scannerStatus.value = {
+        activeProjects: status.activeProjects || [],
+        lastScanTime: status.lastScanTime,
+      }
+      // Also update config from status
+      scannerConfig.value = {
+        enabled: status.enabled,
+        intervalMs: status.intervalMs,
+        isScanning: status.isScanning,
+      }
+    } catch {
+      // keep defaults
+    }
+  }
+
   async function updateScannerConfig(config: { enabled?: boolean; intervalMs?: number }) {
     const result = await dashboardApi.updateScannerConfig(config)
     scannerConfig.value = result.config
@@ -150,6 +166,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     reviews,
     loading,
     scannerConfig,
+    scannerStatus,
     fixerConfig,
     fetchTasks,
     fetchReviews,
@@ -157,12 +174,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     addTask,
     updateTask,
     deleteTask,
-    approveReview,
     ignoreReview,
     fixReview,
     triggerScan,
     batchFixReviews,
     fetchScannerConfig,
+    fetchScannerStatus,
     updateScannerConfig,
     fetchFixerConfig,
     updateFixerConfig,

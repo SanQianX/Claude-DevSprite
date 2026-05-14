@@ -168,14 +168,15 @@ export class DesignFixer {
           await fs.promises.writeFile(fullPath, fix.fixedContent, 'utf-8');
           db.updateReview(review.id, { status: 'fixed', resolved_at: new Date().toISOString() });
 
-          // 自动创建任务，状态为“已完成”
+          // 自动创建任务，状态为”已完成”
           try {
             await db.createTask({
-              review_id: review.id,
+              project_id: review.project_id,
               status: 'completed',
               title: `Fix completed: ${review.title}`,
               description: review.description || review.title,
-              created_at: new Date().toISOString(),
+              priority: 'low',
+              estimated: null,
             });
           } catch (taskError: any) {
             logger.error(`[DesignFixer] Failed to create task for review ${review.id}: ${taskError.message}`);

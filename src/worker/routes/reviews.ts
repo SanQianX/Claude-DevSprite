@@ -12,8 +12,8 @@ import * as os from 'os';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { getDatabase } from '../db';
 import { CodeReviewer } from '../../analyzer/codeReviewer';
-import { DesignScanner } from '../../analyzer/designScanner';
-import { DesignFixer } from '../../analyzer/designFixer';
+import { getSharedScanner, resetSharedScanner } from '../../analyzer/designScanner';
+import { AgentFixer } from '../../analyzer/agentFixer';
 import type { AIConfig } from '../../analyzer/aiProvider';
 import { createLogger } from '../../utils/logger';
 
@@ -33,8 +33,7 @@ function loadConfigOverride(): Record<string, any> {
 }
 
 let reviewer: CodeReviewer | null = null;
-let scanner: DesignScanner | null = null;
-let fixer: DesignFixer | null = null;
+let fixer: AgentFixer | null = null;
 
 /**
  * Build an isolated AIConfig from per-agent settings in config.json.
@@ -59,22 +58,9 @@ function getReviewer(): CodeReviewer {
   return reviewer;
 }
 
-function getScanner(): DesignScanner {
-  if (!scanner) {
-    const override = loadConfigOverride();
-    const scannerModel = override.ai?.scannerModel || override.ai?.model;
-    const agentConfig = buildAgentConfig('scanner');
-    scanner = new DesignScanner({ model: scannerModel, agentConfig });
-  }
-  return scanner;
-}
-
-function getFixer(): DesignFixer {
+function getFixer(): AgentFixer {
   if (!fixer) {
-    const override = loadConfigOverride();
-    const fixerModel = override.ai?.fixerModel || override.ai?.model;
-    const agentConfig = buildAgentConfig('fixer');
-    fixer = new DesignFixer({ model: fixerModel, agentConfig });
+    fixer = new AgentFixer({ fixIntervalMs: 30 * 60 * 1000 }); // 30 minutes
   }
   return fixer;
 }
@@ -85,7 +71,7 @@ function getFixer(): DesignFixer {
  */
 export function resetAgentSingletons(): void {
   reviewer = null;
-  scanner = null;
+  resetSharedScanner();
   fixer = null;
 }
 
@@ -95,8 +81,17 @@ export function registerScannerConfigRoutes(app: Express): void {
    * Get current scanner configuration
    */
   app.get('/api/scanner/config', asyncHandler(async (_req: Request, res: Response) => {
-    const s = getScanner();
+    const s = getSharedScanner();
     res.json(s.getConfig());
+  }));
+
+  /**
+   * GET /api/scanner/status
+   * Get detailed scanner status including per-project active scans
+   */
+  app.get('/api/scanner/status', asyncHandler(async (_req: Request, res: Response) => {
+    const s = getSharedScanner();
+    res.json(s.getScannerStatus());
   }));
 
   /**
@@ -105,7 +100,7 @@ export function registerScannerConfigRoutes(app: Express): void {
    */
   app.put('/api/scanner/config', asyncHandler(async (req: Request, res: Response) => {
     const { enabled, intervalMs } = req.body;
-    const s = getScanner();
+    const s = getSharedScanner();
     s.updateConfig({ enabled, intervalMs });
     res.json({ message: '扫描配置已更新', config: s.getConfig() });
   }));
@@ -128,6 +123,39 @@ export function registerScannerConfigRoutes(app: Express): void {
     const f = getFixer();
     f.updateFixerConfig({ enabled, intervalMs });
     res.json({ message: '修复配置已更新', config: f.getFixerConfig() });
+  }));
+
+  /**
+   * POST /api/fixer/trigger
+   * Manually trigger fixer for a specific project
+   */
+  app.post('/api/fixer/trigger', asyncHandler(async (req: Request, res: Response) => {
+    const { projectName } = req.body || {};
+    const f = getFixer();
+
+    if (f.getFixerConfig().isFixing) {
+      res.json({ message: '修复正在进行中，请稍后再试', fixing: true });
+      return;
+    }
+
+    const db = await getDatabase();
+    const projects = projectName
+      ? [db.getProject(projectName)].filter(Boolean)
+      : db.getProjects();
+
+    if (projects.length === 0) {
+      throw createError(projectName ? `Project "${projectName}" not found` : 'No projects found', 404);
+    }
+
+    // Run fix in background (non-blocking)
+    f.fixAllProjects().catch(err => {
+      logger.error('[Fixer] Background fix failed:', err);
+    });
+
+    res.json({
+      message: `已触发修复: ${projects.length} 个项目`,
+      fixing: true,
+    });
   }));
 }
 
@@ -162,7 +190,7 @@ export function registerReviewRoutes(app: Express): void {
     const project = db.getProject(projectName);
     if (!project) throw createError('Project not found', 404);
 
-    const s = getScanner();
+    const s = getSharedScanner();
     const findingsCount = await s.scanProject(project.id, project.path, project.name);
 
     res.json({
