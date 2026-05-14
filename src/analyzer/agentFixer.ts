@@ -1,19 +1,26 @@
 /**
  * Agent Fixer — Two-Level Claude Code CLI Architecture for Auto-Fix
  *
- * Level 1 (Orchestrator): 轻量协调 Agent
- *   - 读取 reviews 表中的 pending 问题
- *   - 为每个问题创建 fix 目录 + task.md + CLAUDE.md
- *   - 写 summary.md 和 findings.json
- *   - 完成后关闭
+ * Architecture (Orchestrator 常驻 + Worker 串行):
  *
- * Level 2 (Worker): 深度修复 Agent（严格串行，一次一个）
- *   - 在 fix 目录中运行
- *   - 读取 CLAUDE.md 和 task.md，深度分析并修复
- *   - 写 fix-applied.md / test-result.md
- *   - git commit + push
- *   - 更新 review 状态为 'fixed'
- *   - 完成后关闭，启动下一个 Worker
+ *   Orchestrator (长生命周期, 常驻)
+ *     │
+ *     ├── Phase 1: 创建修复任务目录 (task.md + CLAUDE.md)
+ *     │
+ *     ├── Phase 2: 串行管理 Worker 生命周期
+ *     │     ├── 启动 Worker 1 → 等待完成/超时 → 关闭 Worker 1
+ *     │     ├── 启动 Worker 2 → 等待完成/超时 → 关闭 Worker 2
+ *     │     └── ...
+ *     │
+ *     └── 关闭
+ *
+ *   Worker (短生命周期, 一次修复一个问题)
+ *     ├── 读取 CLAUDE.md + task.md
+ *     ├── 修复前测试 (Playwright 截图 / curl)
+ *     ├── 应用修复 + 重新构建 + 重启服务
+ *     ├── 修复后测试 (不通过则继续修复)
+ *     ├── 写 5 个标准文档 (01-05)
+ *     └── 退出
  */
 
 import { spawn, type ChildProcess } from 'child_process';
@@ -27,8 +34,8 @@ import type { FixerConfig } from './designFixer';
 
 const logger = createLogger('agent-fixer');
 
-const ORCHESTRATOR_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
-const WORKER_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes per worker
+const ORCHESTRATOR_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes for orchestrator (create dirs)
+const WORKER_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes per worker (fix one issue)
 
 interface AgentConfig {
   model?: string;
@@ -89,7 +96,6 @@ function getToday(): string {
 
 /**
  * Create a slug from issue title for directory naming.
- * Extracts 2-4 core words, lowercased, hyphen-separated.
  */
 function slugify(title: string): string {
   const stopWords = new Set(['的', '了', '在', '是', '和', '与', '或', '及', 'the', 'a', 'an', 'is', 'are', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'of']);
@@ -442,7 +448,7 @@ export class AgentFixer {
       // ─── Step 4: Read findings.json to map dirs to review IDs ───
       const findingsMap = this.readFindingsMap(fixtasksBase);
 
-      // ─── Step 5: Serial Workers — fix one at a time ───
+      // ─── Step 5: Serial Workers — Orchestrator manages Worker lifecycle ───
       logger.info(`[AgentFixer] Phase 2: Running ${fixDirs.length} serial worker(s) for "${projectName}"`);
       await this.runFixWorkers(
         fixDirs, projectId, projectPath, projectName, fixtasksBase, findingsMap
@@ -455,8 +461,12 @@ export class AgentFixer {
     }
   }
 
-  // ─── Serial Fix Workers ──────────────────────────────────────────────────
+  // ─── Serial Fix Workers (Orchestrator 管理 Worker 生命周期) ────────────────
 
+  /**
+   * Orchestrator 串行管理 Worker:
+   *   启动 Worker → 等待完成/超时 → 关闭 Worker → 下一个
+   */
   private async runFixWorkers(
     fixDirs: string[],
     projectId: string,
@@ -472,18 +482,23 @@ export class AgentFixer {
 
       logger.info(`[AgentFixer] Fixing [${i + 1}/${fixDirs.length}]: ${fixDir}`);
 
-      // 1. Spawn Worker CLI
-      const process = await this.spawnFixWorker(projectPath, fixPath);
-      this.currentProcess = process;
+      // 1. 启动 Worker (短生命周期, 在 fix 目录下运行)
+      const workerProcess = this.spawnFixWorker(projectPath, fixPath);
+      this.currentProcess = workerProcess;
 
-      // 2. Wait for completion or timeout
-      await this.waitForProcess(process, WORKER_TIMEOUT_MS);
+      // 2. 等待 Worker 完成或超时
+      const { timedOut } = await this.waitForProcess(workerProcess, WORKER_TIMEOUT_MS);
       this.currentProcess = null;
 
-      // 3. Git commit + push
+      // 3. 关闭 Worker (如果超时, 强制 kill)
+      if (timedOut) {
+        logger.warn(`[AgentFixer] Worker timeout for "${fixDir}" — killed by Orchestrator`);
+      }
+
+      // 4. Git commit + push (代码 + fixtasks 文档)
       await this.commitAndPush(projectPath, projectName, fixPath);
 
-      // 4. Update review status
+      // 5. 更新 review 状态为 'fixed'
       if (reviewId) {
         const db = await getDatabase();
         db.updateReview(reviewId, {
@@ -493,7 +508,7 @@ export class AgentFixer {
         logger.info(`[AgentFixer] Review ${reviewId} marked as fixed`);
       }
 
-      logger.info(`[AgentFixer] Completed fix: ${fixDir}`);
+      logger.info(`[AgentFixer] Completed fix: ${fixDir} — Orchestrator moving to next Worker`);
     }
   }
 
@@ -569,12 +584,16 @@ export class AgentFixer {
     });
   }
 
-  // ─── Worker (Level 2) ──────────────────────────────────────────────────────
+  // ─── Worker (Level 2, 短生命周期) ──────────────────────────────────────────
 
+  /**
+   * 启动 Worker (短生命周期, 一次修复一个问题)
+   * Orchestrator 启动它, 等待完成/超时, 然后关闭
+   */
   private spawnFixWorker(
     projectPath: string,
     fixPath: string
-  ): Promise<ChildProcess> {
+  ): ChildProcess {
     const agentConfig = loadAgentConfig();
     const claudePath = resolveClaudeCLI();
     const env = buildCleanEnv(agentConfig);
@@ -588,55 +607,57 @@ export class AgentFixer {
     const fixDirName = path.basename(fixPath);
     logger.info(`[AgentFixer] Worker: ${claudePath} in ${fixPath}`);
 
-    return new Promise((resolve) => {
-      const child = spawn(claudePath, args, {
-        cwd: fixPath,
-        env,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true,
-        shell: process.platform === 'win32',
-      });
-
-      child.stdout?.on('data', () => {});
-      child.stderr?.on('data', () => {});
-
-      child.on('error', (error) => {
-        logger.error(`[AgentFixer] Worker failed in "${fixDirName}": ${error.message}`);
-      });
-
-      child.on('close', (code) => {
-        if (code !== 0) {
-          logger.error(`[AgentFixer] Worker exited ${code} in "${fixDirName}"`);
-        } else {
-          logger.info(`[AgentFixer] Worker completed: "${fixDirName}"`);
-        }
-      });
-
-      child.stdin?.write(prompt);
-      child.stdin?.end();
-
-      resolve(child);
+    const child = spawn(claudePath, args, {
+      cwd: fixPath,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+      shell: process.platform === 'win32',
     });
+
+    child.stdout?.on('data', () => {});
+    child.stderr?.on('data', () => {});
+
+    child.on('error', (error) => {
+      logger.error(`[AgentFixer] Worker failed in "${fixDirName}": ${error.message}`);
+    });
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        logger.error(`[AgentFixer] Worker exited ${code} in "${fixDirName}"`);
+      } else {
+        logger.info(`[AgentFixer] Worker completed: "${fixDirName}"`);
+      }
+    });
+
+    child.stdin?.write(prompt);
+    child.stdin?.end();
+
+    return child;
   }
 
-  private waitForProcess(child: ChildProcess, timeoutMs: number): Promise<void> {
+  /**
+   * 等待 Worker 完成或超时
+   * Orchestrator 调用此方法监控 Worker 生命周期
+   */
+  private waitForProcess(child: ChildProcess, timeoutMs: number): Promise<{ timedOut: boolean }> {
     return new Promise((resolve) => {
-      let killed = false;
+      let timedOut = false;
 
       const timeout = setTimeout(() => {
-        killed = true;
-        logger.warn(`[AgentFixer] Worker timeout, killing process`);
+        timedOut = true;
+        logger.warn(`[AgentFixer] Worker timeout — Orchestrator killing process`);
         child.kill('SIGTERM');
       }, timeoutMs);
 
       child.on('close', () => {
         clearTimeout(timeout);
-        resolve();
+        resolve({ timedOut });
       });
 
       child.on('error', () => {
         clearTimeout(timeout);
-        resolve();
+        resolve({ timedOut });
       });
     });
   }
@@ -751,8 +772,6 @@ export class AgentFixer {
 
 /**
  * Shared singleton fixer instance.
- * All modules (worker/index.ts, reviews.ts, etc.) must use this
- * to ensure the background fixer is shared.
  */
 let _sharedFixer: AgentFixer | null = null;
 
