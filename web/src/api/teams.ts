@@ -1,6 +1,6 @@
 /**
  * Teams API Client
- * Handles team configuration and chat API calls
+ * Handles team configuration and session API calls
  */
 
 import { apiClient, unwrap } from './client';
@@ -23,14 +23,6 @@ export interface TeamStatus {
   currentTask?: string;
   lastActivity?: string;
   error?: string;
-}
-
-export interface ChatEvent {
-  type: string;
-  team: string;
-  content: string;
-  taskId?: string;
-  metadata?: Record<string, any>;
 }
 
 // Team API
@@ -89,16 +81,6 @@ export const teamsApi = {
    */
   async abortAll(): Promise<void> {
     await unwrap(apiClient.post<void>('/teams/abort-all', {}));
-  },
-};
-
-// Chat API (legacy REST - kept for backward compatibility, WebSocket is primary)
-export const chatApi = {
-  /**
-   * Send chat message via REST
-   */
-  async send(message: string): Promise<void> {
-    await apiClient.post('/chat/send', { message });
   },
 };
 
