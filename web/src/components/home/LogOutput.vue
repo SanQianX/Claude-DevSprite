@@ -17,7 +17,14 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import type { ParsedLogLine } from '@/stores/logs'
+
+interface ParsedLogLine {
+  timestamp: string
+  level: string
+  prefix: string
+  message: string
+  raw: string
+}
 
 const props = defineProps<{
   lines: ParsedLogLine[]

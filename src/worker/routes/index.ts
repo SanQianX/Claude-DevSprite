@@ -12,7 +12,7 @@ import { registerAnalysisRoutes } from './analysis';
 import { registerRelationRoutes } from './relations';
 import { registerConfigRoutes } from './config';
 import { registerInternalRoutes } from './internal';
-import { registerLogRoutes } from './logs';
+
 import { registerTeamRoutes } from './teams';
 import { registerTokenRoutes } from './tokens';
 import { registerDashboardRoutes } from './dashboard';
@@ -30,7 +30,7 @@ export function registerRoutes(app: Express): void {
   registerRelationRoutes(app);
   registerConfigRoutes(app);
   registerInternalRoutes(app);
-  registerLogRoutes(app);
+
   registerTeamRoutes(app);
   registerTokenRoutes(app);
   registerDashboardRoutes(app);

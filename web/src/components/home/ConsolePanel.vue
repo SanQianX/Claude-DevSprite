@@ -49,46 +49,51 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useLogsStore } from '@/stores/logs'
 import { useAnalysisStore } from '@/stores/analysis'
 import LogFilters from './LogFilters.vue'
 import LogOutput from './LogOutput.vue'
 
-const logsStore = useLogsStore()
 const analysisStore = useAnalysisStore()
 const { connected: sseConnected } = storeToRefs(analysisStore)
 
-const {
-  consoleOpen,
-  consoleHeight,
-  activeLevel,
-  autoRefresh,
-  loading,
-  error,
-  filteredLines,
-  newMessageCount,
-  totalLines,
-  returnedLines,
-} = storeToRefs(logsStore)
+const consoleOpen = ref(false)
+const consoleHeight = ref(parseInt(localStorage.getItem('consoleHeight') || '250', 10))
+const activeLevel = ref('ALL')
+const autoRefresh = ref(true)
+const loading = ref(false)
+const error = ref<string | null>(null)
+const filteredLines = ref<any[]>([])
+const newMessageCount = ref(0)
+const totalLines = ref(0)
+const returnedLines = ref(0)
 
-const { fetchLogs, toggleConsole, setConsoleHeight, startAutoRefresh, stopAutoRefresh } = logsStore
-
-// Start auto-refresh + SSE on mount
-startAutoRefresh()
+// Start SSE on mount
 analysisStore.connectSSE()
 
 function toggleAutoRefresh() {
-  if (autoRefresh.value) {
-    stopAutoRefresh()
-  } else {
-    startAutoRefresh()
-  }
+  autoRefresh.value = !autoRefresh.value
 }
 
 function onLevelChange(level: string) {
   activeLevel.value = level
-  fetchLogs()
+}
+
+function fetchLogs() {
+  // TODO: Logs store removed — ConsolePanel log fetching needs reimplementation
+}
+
+function toggleConsole() {
+  consoleOpen.value = !consoleOpen.value
+  if (consoleOpen.value) {
+    newMessageCount.value = 0
+  }
+}
+
+function setConsoleHeight(h: number) {
+  consoleHeight.value = h
+  localStorage.setItem('consoleHeight', String(h))
 }
 
 function startResize(e: MouseEvent) {
