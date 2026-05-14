@@ -1,12 +1,12 @@
 /**
  * Dashboard API Routes
- * Tasks and Reviews CRUD for project dashboard
+ * Tasks CRUD for project dashboard
  */
 
 import type { Express, Request, Response } from 'express';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { getDatabase } from '../db';
-import type { Task, Review } from '../db';
+import type { Task } from '../db';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('dashboard');
@@ -100,44 +100,6 @@ export function registerDashboardRoutes(app: Express): void {
     if (!task) throw createError('Task not found', 404);
 
     db.deleteTask(taskId);
-    res.json({ success: true });
-  }));
-
-  /**
-   * GET /api/projects/:name/reviews
-   * List reviews for a project
-   */
-  app.get('/api/projects/:name/reviews', asyncHandler(async (req: Request, res: Response) => {
-    const projectName = req.params.name;
-    const db = await getDatabase();
-    const project = db.getProject(projectName);
-    if (!project) throw createError('Project not found', 404);
-
-    const reviews = db.getReviews(project.id);
-    res.json({ reviews });
-  }));
-
-  /**
-   * PUT /api/projects/:name/reviews/:id
-   * Update a review (approve, ignore, etc.)
-   */
-  app.put('/api/projects/:name/reviews/:id', asyncHandler(async (req: Request, res: Response) => {
-    const reviewId = parseInt(req.params.id, 10);
-    if (isNaN(reviewId)) throw createError('Invalid review ID', 400);
-    const db = await getDatabase();
-    const review = db.getReview(reviewId);
-    if (!review) throw createError('Review not found', 404);
-
-    const ALLOWED = ['title', 'severity', 'location', 'suggestion', 'source', 'status', 'resolved_at'];
-    const updates: Record<string, unknown> = {};
-    for (const key of ALLOWED) {
-      if (key in req.body) updates[key] = req.body[key];
-    }
-    if (updates.status && ['approved', 'ignored'].includes(updates.status as string)) {
-      updates.resolved_at = new Date().toISOString();
-    }
-
-    db.updateReview(reviewId, updates as Partial<Review>);
     res.json({ success: true });
   }));
 
