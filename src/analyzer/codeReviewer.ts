@@ -296,12 +296,11 @@ export class CodeReviewer {
   /**
    * Generate a fix for a review finding.
    * This method corresponds to the POST /reviews/:id/fix endpoint, as per design documentation.
-   * 
-   * **关于废弃端点的说明 (对应审查意见):**
-   * - 文档中提到的 `PUT /reviews/:id/approve` 和 `PUT /reviews/:id/ignore` 端点被确认为死代码。
-   * - 这些端点在后端存在但从未被前端调用。它们与本模块的 `generateFix` 方法（用于修复）不同。
-   * - 为保持清晰和避免混淆，调用方应只使用 `POST /reviews/:id/fix` 来处理问题修复。
-   * - 建议在相关的路由文件中移除或明确标记 `approve` 和 `ignore` 端点为废弃状态。
+   *
+   * **关于端点的说明:**
+   * - 本方法仅用于生成修复内容，由 POST /reviews/:id/fix 路由调用。
+   * - 审核状态更新（approve/ignore）由 reviews.ts 和 dashboard.ts 中的
+   *   PUT /api/projects/:name/reviews/:id 端点处理，前端正在使用该端点。
    */
   async generateFix(
     projectPath: string,
@@ -396,20 +395,18 @@ export class CodeReviewer {
 /**
  * Create an Express router with all review-related API endpoints.
  * This function encapsulates the route definitions, aligning them with the design document.
- * 
- * **路由说明 (对应审查意见):**
+ *
+ * **路由说明:**
  * - **POST /reviews/:id/fix**: 已实现。调用 `CodeReviewer.generateFix` 方法，处理修复请求。
- * - **PUT /reviews/:id/approve** 和 **PUT /reviews/:id/ignore**: 根据设计文档，这些是死代码端点。
- *   - 设计文档 (FUNCTIONAL-LOGIC-ANALYSIS.md) 的 '死代码与路由冲突' 部分明确指出，这些端点在前端从未被调用。
- *   - 为避免混淆和不一致，本路由器**不包含**这两个端点。它们已被确认为遗留代码，应从代码库中移除。
- *   - 如果未来需要类似功能，应根据实际需求重新设计并添加新端点。
- * 
+ * - **PUT /api/projects/:name/reviews/:id**: 由 reviews.ts 和 dashboard.ts 实现，
+ *   用于更新审核状态（approve/ignore/fixed/confirmed），前端正在使用。
+ *
  * **使用方式:**
  * 在主应用（如 src/worker/app.ts）中导入并挂载此路由器：
  * ```typescript
  * import { CodeReviewer } from '../analyzer/codeReviewer';
  * import { createReviewsRouter } from '../analyzer/codeReviewer'; // 或从此处导出
- * 
+ *
  * const reviewer = new CodeReviewer();
  * const reviewsRouter = createReviewsRouter(reviewer);
  * app.use('/api', reviewsRouter); // 挂载后，端点路径变为 /api/reviews/:id/fix
@@ -468,11 +465,9 @@ export function createReviewsRouter(reviewer: CodeReviewer): Router {
     }
   });
 
-  // 注意：根据设计文档 (FUNCTIONAL-LOGIC-ANALYSIS.md) 的“死代码与路由冲突”清单，
-  // 以下端点被明确标识为死代码（前端从未调用），因此不予实现：
-  // - PUT /reviews/:id/approve
-  // - PUT /reviews/:id/ignore
-  // 如需类似功能，应重新评估需求并设计新端点。
+  // 注意：审核状态更新（approve/ignore）由 reviews.ts 和 dashboard.ts 中的
+  // PUT /api/projects/:name/reviews/:id 端点处理，前端正在使用该端点。
+  // 本路由器仅负责 POST /reviews/:id/fix 端点。
 
   return router;
 }
