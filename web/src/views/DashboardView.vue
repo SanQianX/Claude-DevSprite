@@ -123,14 +123,6 @@
             <div v-else-if="lastScanTimeText" class="scan-last-time">
               上次扫描: {{ lastScanTimeText }}
             </div>
-            <!-- Fixer status indicator -->
-            <div v-if="fixerStore.isFixing" class="fixer-active-bar">
-              <div class="fixer-pulse"></div>
-              <span class="fixer-active-text">
-                修复中 [{{ fixerStore.currentFixIndex }}/{{ fixerStore.totalFixes }}]:
-                <span class="fixer-current-dir">{{ fixerStore.currentFixDir }}</span>
-              </span>
-            </div>
             <span class="scan-divider"></span>
             <label class="scan-toggle">
               <input type="checkbox" v-model="autoFixerEnabled" @change="toggleAutoFixer" />
@@ -194,9 +186,20 @@
           v-for="review in filteredReviews"
           :key="review.id"
           class="review-item"
-          :class="{ 'review-item-expanded': selectedReviewId === review.id }"
+          :class="{
+            'review-item-expanded': selectedReviewId === review.id,
+            'review-item-fixing': fixerStore.isFixing && review.id === fixerStore.currentReviewId,
+          }"
           @click="toggleReviewDetail(review.id)"
         >
+          <!-- Fixing indicator bar -->
+          <div v-if="fixerStore.isFixing && review.id === fixerStore.currentReviewId" class="review-fixing-bar">
+            <div class="review-fixing-pulse"></div>
+            <span class="review-fixing-text">
+              修复中 [{{ fixerStore.currentFixIndex }}/{{ fixerStore.totalFixes }}]
+            </span>
+            <span class="review-fixing-dir">{{ fixerStore.currentFixDir }}</span>
+          </div>
           <div class="review-top">
             <span class="severity-badge" :class="'severity-' + review.severity.toLowerCase()">
               {{ review.severity }}
@@ -284,6 +287,7 @@ const fixerStore = computed(() => ({
   currentFixDir: dashboardStore.fixerConfig.currentFixDir,
   currentFixIndex: dashboardStore.fixerConfig.currentFixIndex,
   totalFixes: dashboardStore.fixerConfig.totalFixes,
+  currentReviewId: dashboardStore.fixerConfig.currentReviewId,
 }))
 
 const showAddTask = ref(false)
@@ -394,13 +398,22 @@ const completionPercent = computed(() => {
 const reviews = computed(() => dashboardStore.reviews)
 
 const filteredReviews = computed(() => {
-  return reviews.value.filter(r => {
+  const filtered = reviews.value.filter(r => {
     const statusMatch = statusFilter.value === 'all' || r.status === statusFilter.value
     // 严重性筛选：大小写不敏感比较
     const severityMatch = severityFilter.value === 'all' ||
       r.severity?.toUpperCase() === severityFilter.value.toUpperCase()
     return statusMatch && severityMatch
   })
+  // 正在修复的问题排到最前面
+  if (fixerStore.value.isFixing && fixerStore.value.currentReviewId) {
+    const fixingIdx = filtered.findIndex(r => r.id === fixerStore.value.currentReviewId)
+    if (fixingIdx > 0) {
+      const [fixingReview] = filtered.splice(fixingIdx, 1)
+      filtered.unshift(fixingReview)
+    }
+  }
+  return filtered
 })
 
 const reviewStats = computed(() => ({
@@ -1003,19 +1016,25 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.fixer-active-bar {
+.review-item-fixing {
+  background: #eff6ff !important;
+  border-left: 3px solid #3b82f6;
+}
+
+.review-fixing-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 12px;
+  padding: 6px 10px;
+  margin: -16px -20px 12px -20px;
+  padding: 8px 20px;
   background: #dbeafe;
-  border: 1px solid #93c5fd;
-  border-radius: 6px;
+  border-bottom: 1px solid #93c5fd;
   font-size: 12px;
   color: #1e40af;
 }
 
-.fixer-pulse {
+.review-fixing-pulse {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -1024,14 +1043,18 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.fixer-current-dir {
+.review-fixing-text {
   font-weight: 600;
-  max-width: 200px;
+}
+
+.review-fixing-dir {
+  font-family: monospace;
+  font-size: 11px;
+  color: #3b82f6;
+  max-width: 250px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: inline-block;
-  vertical-align: bottom;
 }
 
 @keyframes pulse {

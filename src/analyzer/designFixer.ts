@@ -21,6 +21,7 @@ export interface FixerConfig {
   currentFixDir: string | null;
   currentFixIndex: number;
   totalFixes: number;
+  currentReviewId: number | null;
 }
 
 export class DesignFixer {
@@ -43,6 +44,7 @@ export class DesignFixer {
       currentFixDir: null,
       currentFixIndex: 0,
       totalFixes: 0,
+      currentReviewId: null,
     };
   }
 

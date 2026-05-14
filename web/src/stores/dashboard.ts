@@ -24,6 +24,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const fixerConfig = ref<{
     enabled: boolean; intervalMs: number; isFixing: boolean;
     currentFixDir: string | null; currentFixIndex: number; totalFixes: number;
+    currentReviewId: number | null;
   }>({
     enabled: false,
     intervalMs: 30 * 60 * 1000,
@@ -31,6 +32,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     currentFixDir: null,
     currentFixIndex: 0,
     totalFixes: 0,
+    currentReviewId: null,
   })
 
   async function fetchTasks(projectName: string) {

@@ -328,6 +328,7 @@ export class AgentFixer {
   private currentFixDir: string | null = null;
   private currentFixIndex = 0;
   private totalFixes = 0;
+  private currentReviewId: number | null = null;
 
   constructor(options?: { fixIntervalMs?: number }) {
     this.fixIntervalMs = options?.fixIntervalMs ?? 30 * 60 * 1000; // 30 minutes default
@@ -341,6 +342,7 @@ export class AgentFixer {
       currentFixDir: this.currentFixDir,
       currentFixIndex: this.currentFixIndex,
       totalFixes: this.totalFixes,
+      currentReviewId: this.currentReviewId,
     };
   }
 
@@ -491,6 +493,7 @@ export class AgentFixer {
       // 更新当前修复状态 (供前端轮询)
       this.currentFixDir = fixDir;
       this.currentFixIndex = i + 1;
+      this.currentReviewId = reviewId || null;
 
       logger.info(`[AgentFixer] Fixing [${i + 1}/${fixDirs.length}]: ${fixDir}`);
 
@@ -527,6 +530,7 @@ export class AgentFixer {
     this.currentFixDir = null;
     this.currentFixIndex = 0;
     this.totalFixes = 0;
+    this.currentReviewId = null;
   }
 
   // ─── Orchestrator (Level 1) ────────────────────────────────────────────────
