@@ -10,6 +10,9 @@ import type { WsServer, ClientConnection } from './wsServer';
 import type { SessionManager, SessionMessage } from './sessionManager';
 import type { TeamManager } from '../teams/teamManager';
 import type { ChatEvent, TeamName } from '../teams/types';
+import { config } from '../config';
+import { relayManager } from '../relay/relayManager';
+import { syncServer } from '../sync/syncServer';
 
 const logger = createLogger('ws-handler');
 
@@ -68,6 +71,12 @@ export class WsHandler {
 
       case 'chat.send':
         this.handleChatSend(client, message);
+        break;
+
+      case 'scan.trigger':
+      case 'fix.trigger':
+      case 'config.update':
+        this.handleRelayCommand(client, message);
         break;
 
       case 'ping':
@@ -219,6 +228,30 @@ export class WsHandler {
     });
     this.broadcastChatMessage(session.id, userMessage);
 
+    // Relay mode: forward to agent if sync enabled and agent online
+    if (config.sync.enabled) {
+      const userId = 1; // Default single-user
+      if (relayManager.isAgentOnline(userId)) {
+        // Forward command to agent
+        relayManager.sendToAgent(userId, {
+          type: 'chat.send',
+          sessionId: session.id,
+          content: content.trim(),
+        });
+        logger.info(`Chat forwarded to agent for session ${session.id}`);
+        // Agent will stream results back via syncServer
+        return;
+      }
+      // Agent offline — notify browser
+      this.wsServer.sendToClient(client.ws, {
+        type: 'chat.error',
+        sessionId: session.id,
+        message: 'Agent offline — local execution not available in sync mode',
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
     // Get or create TeamManager for this project
     const projectPath = client.projectPath || process.cwd();
     const teamManager = await this.getTeamManager(projectPath);
@@ -339,6 +372,26 @@ export class WsHandler {
       message,
       timestamp: Date.now(),
     });
+  }
+
+  /**
+   * Handle relay commands (scan.trigger, fix.trigger, config.update)
+   * Forward to agent if in relay mode
+   */
+  private handleRelayCommand(client: ClientConnection, message: ClientMessage): void {
+    if (!config.sync.enabled) {
+      this.wsServer.sendError(client.ws, 'RELAY_DISABLED', 'Remote sync is not enabled');
+      return;
+    }
+
+    const userId = 1; // Default single-user
+    if (!relayManager.isAgentOnline(userId)) {
+      this.wsServer.sendError(client.ws, 'AGENT_OFFLINE', 'Agent is not connected');
+      return;
+    }
+
+    relayManager.sendToAgent(userId, message);
+    logger.info(`Relay command forwarded: ${message.type}`);
   }
 
   /**

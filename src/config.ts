@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
+import crypto from 'crypto';
 
 /**
  * Configuration for project discovery.
@@ -95,6 +96,23 @@ export interface WebConfig {
 }
 
 /**
+ * Configuration for remote sync.
+ * Controls synchronization between local machine and cloud server.
+ */
+export interface SyncConfig {
+  /** Whether remote sync is enabled */
+  enabled: boolean;
+  /** Server URL for sync (e.g., 'ws://myserver:38888') */
+  serverUrl: string;
+  /** Interval in milliseconds between sync pushes */
+  syncIntervalMs: number;
+  /** Secret key for JWT token signing */
+  jwtSecret: string;
+  /** Token for agent authentication */
+  agentToken: string;
+}
+
+/**
  * Configuration for logging.
  * Defines log level and optional log file output.
  */
@@ -124,6 +142,8 @@ export interface Config {
   logging: LoggingConfig;
   /** Project discovery configuration */
   projectDiscovery: ProjectDiscoveryConfig;
+  /** Remote sync configuration */
+  sync: SyncConfig;
 }
 
 const getDefaultConfig = (): Config => ({
@@ -186,6 +206,13 @@ const getDefaultConfig = (): Config => ({
     knowledgeDirName: 'knowledge',
     autoDiscover: true,
     maxDepth: 3,
+  },
+  sync: {
+    enabled: false,
+    serverUrl: '',
+    syncIntervalMs: 30000,
+    jwtSecret: crypto.randomBytes(32).toString('hex'),
+    agentToken: '',
   },
 });
 

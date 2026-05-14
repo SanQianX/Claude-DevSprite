@@ -36,6 +36,7 @@ Commands:
   stop       Stop the worker daemon
   status     Show daemon status
   restart    Restart the worker daemon
+  agent      Connect to remote server as agent
 
 Options:
   --port N   Set the server port (default: 38888)
@@ -46,6 +47,7 @@ Examples:
   claude-dev-sprite                 # Start on default port 38888
   claude-dev-sprite --port 8080     # Start on custom port
   claude-dev-sprite status          # Check if running
+  claude-dev-sprite agent --server ws://myserver:38888 --token mytoken
 `);
 }
 
@@ -99,6 +101,11 @@ async function main(): Promise<void> {
     case 'restart':
       await cmdRestart();
       break;
+    case 'agent': {
+      const { runAgent } = await import('./agent/index');
+      await runAgent();
+      break;
+    }
     default:
       console.error(`Unknown command: ${command}`);
       printHelp();

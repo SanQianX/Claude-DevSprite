@@ -133,9 +133,11 @@ export class WebSocketClient {
    * Send auth message
    */
   private sendAuth(): void {
+    const token = localStorage.getItem('auth_token');
     this.send({
       type: 'auth',
       projectPath: this.projectPath || '',
+      ...(token ? { token } : {}),
     });
   }
 

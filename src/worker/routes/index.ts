@@ -19,6 +19,7 @@ import { registerDashboardRoutes } from './dashboard';
 import { registerSourceTreeRoutes } from './sourceTree';
 import { registerReviewRoutes, registerScannerConfigRoutes } from './reviews';
 import { registerMemoryRoutes } from './memory';
+import { registerAuthRoutes } from './auth';
 
 export function registerRoutes(app: Express): void {
   // Register route modules
@@ -38,4 +39,5 @@ export function registerRoutes(app: Express): void {
   registerReviewRoutes(app);
   registerScannerConfigRoutes(app);
   registerMemoryRoutes(app);
+  registerAuthRoutes(app);
 }

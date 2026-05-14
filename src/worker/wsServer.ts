@@ -10,6 +10,10 @@ import type { IncomingMessage } from 'http';
 import { createLogger } from '../utils/logger';
 import { WsHandler } from './wsHandler';
 import { SessionManager } from './sessionManager';
+import { relayManager } from '../relay/relayManager';
+import { verifyToken } from '../relay/auth';
+import { config } from '../config';
+import { syncServer } from '../sync/syncServer';
 
 const logger = createLogger('ws-server');
 
@@ -29,6 +33,7 @@ export interface ClientConnection {
  */
 export class WsServer {
   private wss: WebSocketServer | null = null;
+  private agentWss: WebSocketServer | null = null;
   private clients: Map<string, ClientConnection> = new Map();
   private handler: WsHandler;
   private heartbeatInterval: NodeJS.Timeout | null = null;
@@ -59,7 +64,37 @@ export class WsServer {
     // Start heartbeat check every 30 seconds
     this.heartbeatInterval = setInterval(() => {
       this.checkHeartbeats();
+      // Also check agent heartbeats
+      if (config.sync.enabled) {
+        const stale = relayManager.checkHeartbeats();
+        for (const agentId of stale) {
+          const agent = relayManager.getAgent(agentId);
+          if (agent) {
+            syncServer.handleAgentOffline(agent.userId);
+          }
+          relayManager.removeAgent(agentId);
+        }
+      }
     }, 30000);
+
+    // Agent WebSocket server (only if sync is enabled)
+    if (config.sync.enabled) {
+      this.agentWss = new WebSocketServer({
+        server: httpServer,
+        path: '/ws/agent',
+        maxPayload: 1024 * 1024,
+      });
+
+      this.agentWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+        this.handleAgentConnection(ws, req);
+      });
+
+      this.agentWss.on('error', (error: Error) => {
+        logger.error(`Agent WebSocket server error: ${error.message}`);
+      });
+
+      logger.info('Agent WebSocket server attached at /ws/agent');
+    }
 
     logger.info('WebSocket server attached to HTTP server at /ws');
   }
@@ -149,6 +184,121 @@ export class WsServer {
 
     // Notify handler about disconnection
     this.handler.handleDisconnect(clientId);
+  }
+
+  /**
+   * Handle new agent WebSocket connection
+   */
+  private handleAgentConnection(ws: WebSocket, req: IncomingMessage): void {
+    const agentId = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const clientIp = req.socket.remoteAddress || 'unknown';
+    let authenticated = false;
+    let userId = 0;
+
+    logger.info(`Agent connection attempt: ${agentId} from ${clientIp}`);
+
+    // Send connection acknowledgment
+    this.sendToClient(ws, {
+      type: 'connected',
+      agentId,
+      timestamp: Date.now(),
+    });
+
+    ws.on('message', (data: Buffer) => {
+      try {
+        const message = JSON.parse(data.toString());
+
+        // Handle auth first
+        if (message.type === 'agent.register') {
+          if (!config.sync.agentToken || message.token !== config.sync.agentToken) {
+            this.sendError(ws, 'AUTH_FAILED', 'Invalid agent token');
+            ws.close(4001, 'Invalid token');
+            return;
+          }
+
+          authenticated = true;
+          userId = message.userId || 1; // Default to user 1 for single-user setup
+
+          relayManager.addAgent(ws, agentId, userId, message.name, message.hostname);
+          syncServer.handleAgentOnline(userId, message.name, message.hostname);
+
+          this.sendToClient(ws, {
+            type: 'agent.registered',
+            agentId,
+            timestamp: Date.now(),
+          });
+
+          logger.info(`Agent authenticated: ${agentId} (${message.name}@${message.hostname})`);
+          return;
+        }
+
+        // All other messages require auth
+        if (!authenticated) {
+          this.sendError(ws, 'NOT_AUTHENTICATED', 'Send agent.register first');
+          return;
+        }
+
+        // Route agent messages
+        switch (message.type) {
+          case 'agent.heartbeat':
+            relayManager.updateHeartbeat(agentId);
+            this.sendToClient(ws, { type: 'pong', timestamp: Date.now() });
+            break;
+
+          case 'sync.state':
+            syncServer.handleAgentState(userId, message.stateType, message.data);
+            break;
+
+          case 'sync.full':
+            syncServer.handleAgentFullState(userId, message.data);
+            break;
+
+          case 'chat.stream':
+            syncServer.handleChatStream(userId, message.sessionId, message.content);
+            break;
+
+          case 'chat.done':
+            syncServer.handleChatDone(userId, message.sessionId);
+            break;
+
+          default:
+            logger.warn(`Unknown agent message type: ${message.type}`);
+        }
+      } catch (error) {
+        logger.error(`Failed to parse agent message: ${error}`);
+      }
+    });
+
+    ws.on('close', (code: number, reason: Buffer) => {
+      logger.info(`Agent disconnected: ${agentId} (code: ${code})`);
+      if (authenticated) {
+        relayManager.removeAgent(agentId);
+        syncServer.handleAgentOffline(userId);
+      }
+    });
+
+    ws.on('error', (error: Error) => {
+      logger.error(`Agent ${agentId} error: ${error.message}`);
+    });
+  }
+
+  /**
+   * Send message to a specific agent
+   */
+  sendToAgent(agentId: string, message: any): boolean {
+    const agent = relayManager.getAgent(agentId);
+    if (!agent || agent.ws.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+    this.sendToClient(agent.ws, message);
+    return true;
+  }
+
+  /**
+   * Get handler instance (for relay integration)
+   */
+  getHandler(): WsHandler {
+    return this.handler;
   }
 
   /**
@@ -259,6 +409,13 @@ export class WsServer {
         logger.info('WebSocket server shut down');
       });
       this.wss = null;
+    }
+
+    if (this.agentWss) {
+      this.agentWss.close(() => {
+        logger.info('Agent WebSocket server shut down');
+      });
+      this.agentWss = null;
     }
   }
 }

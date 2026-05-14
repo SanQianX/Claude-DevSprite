@@ -42,9 +42,9 @@ const emit = defineEmits<{
 
 const containerRef = ref<HTMLElement | null>(null);
 
-// Filter out system messages and tool messages from display
+// Filter out tool messages from display (keep system messages for task creation feedback)
 const visibleMessages = computed(() =>
-  props.messages.filter(m => m.type !== 'tool_call' && m.type !== 'tool_result' && m.type !== 'system')
+  props.messages.filter(m => m.type !== 'tool_call' && m.type !== 'tool_result')
 );
 
 function toggleThinking() {

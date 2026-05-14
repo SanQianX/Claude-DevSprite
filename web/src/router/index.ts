@@ -2,6 +2,11 @@ import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 
 const routes: RouteRecordRaw[] = [
   {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/views/LoginView.vue')
+  },
+  {
     path: '/',
     name: 'home',
     component: () => import('@/views/HomePage.vue')
@@ -58,6 +63,25 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+// Auth guard: redirect to /login if sync mode and not authenticated
+router.beforeEach((to, _from, next) => {
+  if (to.name === 'login') {
+    next()
+    return
+  }
+
+  // Check if sync mode is enabled by trying to read a config flag
+  // In sync mode, unauthenticated users must login first
+  const token = localStorage.getItem('auth_token')
+  const syncEnabled = localStorage.getItem('sync_enabled') === 'true'
+
+  if (syncEnabled && !token && to.name !== 'login') {
+    next({ name: 'login' })
+  } else {
+    next()
+  }
 })
 
 export default router

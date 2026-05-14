@@ -74,6 +74,30 @@ export interface LinkIndex {
   last_checked: string | null;
 }
 
+export interface User {
+  id: number;
+  username: string;
+  password_hash: string;
+  role: string;
+  created_at: string;
+}
+
+export interface AgentNode {
+  id: string;
+  user_id: number;
+  name: string;
+  hostname: string | null;
+  status: string;
+  last_heartbeat: string | null;
+  connected_at: string | null;
+}
+
+export interface SyncVersion {
+  user_id: number;
+  version: number;
+  updated_at: string;
+}
+
 export interface Task {
   id: number;
   project_id: string;
@@ -309,6 +333,41 @@ export class DatabaseManager {
       )
     `);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_session_summaries_project ON session_summaries(project_name)`);
+
+    // Users table (for remote sync auth)
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS users (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        username      TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role          TEXT DEFAULT 'user',
+        created_at    TEXT NOT NULL
+      )
+    `);
+
+    // Agent connection nodes
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS agent_nodes (
+        id              TEXT PRIMARY KEY,
+        user_id         INTEGER NOT NULL,
+        name            TEXT NOT NULL,
+        hostname        TEXT,
+        status          TEXT DEFAULT 'offline',
+        last_heartbeat  TEXT,
+        connected_at    TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+
+    // Sync version tracking
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS sync_versions (
+        user_id     INTEGER PRIMARY KEY,
+        version     INTEGER DEFAULT 0,
+        updated_at  TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
 
     this.save();
     logger.info('Database tables initialized');
@@ -723,6 +782,76 @@ export class DatabaseManager {
 
   private hashDocumentId(projectId: string, docPath: string): string {
     return crypto.createHash('sha256').update(projectId + ':' + docPath).digest('hex').substring(0, 16);
+  }
+
+  // User operations (sync auth)
+  createUser(username: string, passwordHash: string): User {
+    const now = new Date().toISOString();
+    this.run(
+      `INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)`,
+      [username, passwordHash, now]
+    );
+    const row = this.queryOne('SELECT last_insert_rowid() as id');
+    const id = row ? row.id : 0;
+    this.save();
+    return { id, username, password_hash: passwordHash, role: 'user', created_at: now };
+  }
+
+  getUserByUsername(username: string): User | undefined {
+    return this.queryOne('SELECT * FROM users WHERE username = ?', [username]) as User | undefined;
+  }
+
+  getUserById(id: number): User | undefined {
+    return this.queryOne('SELECT * FROM users WHERE id = ?', [id]) as User | undefined;
+  }
+
+  // Agent node operations
+  createAgentNode(id: string, userId: number, name: string, hostname: string): AgentNode {
+    const now = new Date().toISOString();
+    this.run(
+      `INSERT OR REPLACE INTO agent_nodes (id, user_id, name, hostname, status, connected_at, last_heartbeat)
+       VALUES (?, ?, ?, ?, 'online', ?, ?)`,
+      [id, userId, name, hostname, now, now]
+    );
+    this.save();
+    return { id, user_id: userId, name, hostname, status: 'online', connected_at: now, last_heartbeat: now };
+  }
+
+  updateAgentNodeStatus(id: string, status: string): void {
+    this.run('UPDATE agent_nodes SET status = ? WHERE id = ?', [status, id]);
+    this.save();
+  }
+
+  updateAgentNodeHeartbeat(id: string): void {
+    const now = new Date().toISOString();
+    this.run('UPDATE agent_nodes SET last_heartbeat = ? WHERE id = ?', [now, id]);
+    this.save();
+  }
+
+  getAgentNodesByUserId(userId: number): AgentNode[] {
+    return this.queryAll('SELECT * FROM agent_nodes WHERE user_id = ?', [userId]) as AgentNode[];
+  }
+
+  deleteAgentNode(id: string): void {
+    this.run('DELETE FROM agent_nodes WHERE id = ?', [id]);
+    this.save();
+  }
+
+  // Sync version operations
+  getSyncVersion(userId: number): number {
+    const row = this.queryOne('SELECT version FROM sync_versions WHERE user_id = ?', [userId]);
+    return row ? row.version : 0;
+  }
+
+  incrementSyncVersion(userId: number): number {
+    const now = new Date().toISOString();
+    this.run(
+      `INSERT INTO sync_versions (user_id, version, updated_at) VALUES (?, 1, ?)
+       ON CONFLICT(user_id) DO UPDATE SET version = version + 1, updated_at = ?`,
+      [userId, now, now]
+    );
+    this.save();
+    return this.getSyncVersion(userId);
   }
 
   close(): void {

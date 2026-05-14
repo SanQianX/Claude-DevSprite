@@ -39,6 +39,10 @@ export const useChatStore = defineStore('chat', () => {
   const thinkingContent = ref('');
   const thinkingExpanded = ref(true);
 
+  // Sync state (remote mode)
+  const agentOnline = ref(false);
+  const agentName = ref('');
+
   // WebSocket client
   let wsClient = getWebSocketClient();
   let _handlersRegistered = false;
@@ -56,6 +60,11 @@ export const useChatStore = defineStore('chat', () => {
     ['chat.thinking', handleThinking],
     ['chat.done', handleDone],
     ['session.sync.result', handleSyncResult],
+    ['sync.state', handleSyncState],
+    ['sync.full', handleSyncFull],
+    ['agent.online', handleAgentOnline],
+    ['agent.offline', handleAgentOffline],
+    ['chat.error', handleChatError],
     ['error', handleError],
     ['disconnected', handleDisconnected],
   ];
@@ -78,6 +87,8 @@ export const useChatStore = defineStore('chat', () => {
     // If projectPath changed, disconnect and reconnect with new path
     if (projectPath !== undefined && projectPath !== currentProjectPath) {
       currentProjectPath = projectPath;
+      // Extract project name from path (last segment)
+      currentProjectName = projectPath ? projectPath.split(/[/\\]/).pop() || null : null;
       // Unregister existing handlers before disconnect
       if (_handlersRegistered) {
         for (const [event, handler] of eventHandlers) {
@@ -225,6 +236,42 @@ export const useChatStore = defineStore('chat', () => {
   function handleDone(_data: WsMessage) {
     isThinking.value = false;
     thinkingExpanded.value = false;
+
+    // Auto-create tasks from AI response markers
+    if (currentProjectName) {
+      handleSuggestedTasks(currentProjectName).catch(() => {
+        // Error handling is done inside handleSuggestedTasks
+      });
+    }
+  }
+
+  function handleSyncState(data: WsMessage) {
+    // Received incremental state update from server
+    const { stateType, stateData } = data;
+    // For now, just log — specific state types can update relevant stores
+    console.log(`[Sync] State update: ${stateType}`);
+  }
+
+  function handleSyncFull(data: WsMessage) {
+    // Received full state snapshot from server
+    const { stateData } = data;
+    console.log('[Sync] Full state received', stateData?.projects?.length || 0, 'projects');
+  }
+
+  function handleAgentOnline(data: WsMessage) {
+    agentOnline.value = true;
+    agentName.value = data.agentName || '';
+    addSystemMessage(`本地机器已连接: ${data.agentName}@${data.hostname}`);
+  }
+
+  function handleAgentOffline() {
+    agentOnline.value = false;
+    agentName.value = '';
+    addSystemMessage('本地机器已断开连接');
+  }
+
+  function handleChatError(data: WsMessage) {
+    addSystemMessage(`错误: ${data.message || 'Unknown error'}`);
   }
 
   function handleSyncResult(data: WsMessage) {
@@ -368,6 +415,9 @@ export const useChatStore = defineStore('chat', () => {
     return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   }
 
+  // ─── Current project name for auto task creation ────────────────────────
+  let currentProjectName: string | null = null;
+
   // ─── /task Command ──────────────────────────────────────────────────────
 
   const TASK_COMMAND_RE = /^\/task\s+(.+)/i;
@@ -492,6 +542,10 @@ export const useChatStore = defineStore('chat', () => {
     isThinking,
     thinkingContent,
     thinkingExpanded,
+
+    // Sync state
+    agentOnline,
+    agentName,
 
     // Computed
     agentMessages,
