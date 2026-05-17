@@ -104,6 +104,13 @@ export class WsHandler {
 
     logger.info(`Client ${client.id} authenticated for project: ${client.projectPath}`);
 
+    // Register with syncServer so browser receives synced state
+    if (config.sync.enabled) {
+      const userId = message.userId || 1;
+      syncServer.registerBrowser(userId, client.ws);
+      logger.info(`Browser registered with syncServer for user ${userId}`);
+    }
+
     this.wsServer.sendToClient(client.ws, {
       type: 'auth.result',
       success: true,
@@ -408,7 +415,12 @@ export class WsHandler {
   /**
    * Handle client disconnection - clean up resources
    */
-  handleDisconnect(clientId: string): void {
+  handleDisconnect(clientId: string, ws?: any): void {
+    // Unregister from syncServer
+    if (config.sync.enabled && ws) {
+      syncServer.unregisterBrowser(1, ws);
+    }
+
     const projectPath = this.clientProjects.get(clientId);
     this.clientProjects.delete(clientId);
 

@@ -1,5 +1,4 @@
 @echo off
-set "ANTHROPIC_API_KEY=tp-cusl31fv8i36dr6xh4qdj47o1k5w97dx4wxrj9gikixscsoy"
 set "ANTHROPIC_AUTH_TOKEN=tp-czetsxqmkb5maksmdw18pavhqr6u0xe8i14p8mk0gc0vb9kg"
 set "ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic"
 set "ANTHROPIC_MODEL=mimo-v2.5"

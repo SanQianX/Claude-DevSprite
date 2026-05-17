@@ -27,6 +27,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/SettingsView.vue')
   },
   {
+    path: '/remote',
+    name: 'remote',
+    component: () => import('@/views/RemoteView.vue')
+  },
+  {
     path: '/project/:projectName',
     component: () => import('@/views/ProjectLayout.vue'),
     children: [

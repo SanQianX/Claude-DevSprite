@@ -37,5 +37,12 @@ dev-scripts/worker-env.json
 # 项目运行时数据
 .Claude-DevSprite/
 
+# .NET 编译产物
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+
 # 参考资料与下载
 References/

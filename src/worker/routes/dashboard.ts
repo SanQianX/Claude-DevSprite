@@ -8,6 +8,8 @@ import { asyncHandler, createError } from '../middleware/errorHandler';
 import { getDatabase } from '../db';
 import type { Task } from '../db';
 import { createLogger } from '../../utils/logger';
+import { config } from '../../config';
+import { syncServer } from '../../sync/syncServer';
 
 const logger = createLogger('dashboard');
 
@@ -20,9 +22,21 @@ export function registerDashboardRoutes(app: Express): void {
     const projectName = req.params.name;
     const db = await getDatabase();
     const project = db.getProject(projectName);
-    if (!project) throw createError('Project not found', 404);
 
-    const tasks = db.getTasks(project.id);
+    let tasks: Task[] = [];
+    if (project) {
+      tasks = db.getTasks(project.id);
+    }
+
+    // In sync mode, fallback to cached state from agent if local DB is empty
+    if (config.sync.enabled && tasks.length === 0) {
+      const cached = syncServer.getCachedState(1);
+      if (cached?.tasks) {
+        tasks = cached.tasks;
+        logger.info(`Serving ${tasks.length} tasks from sync cache`);
+      }
+    }
+
     res.json({ tasks });
   }));
 

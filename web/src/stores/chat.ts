@@ -8,6 +8,8 @@ import { ref, computed } from 'vue';
 import { getWebSocketClient, type WsMessage, type ConnectionState } from '../api/websocket';
 import type { Session, SessionMessage } from '../types/session';
 import { dashboardApi } from '../api/dashboard';
+import { useProjectsStore } from './projects';
+import { useDashboardStore } from './dashboard';
 
 export interface ChatMessage {
   id: string;
@@ -248,14 +250,39 @@ export const useChatStore = defineStore('chat', () => {
   function handleSyncState(data: WsMessage) {
     // Received incremental state update from server
     const { stateType, stateData } = data;
-    // For now, just log — specific state types can update relevant stores
     console.log(`[Sync] State update: ${stateType}`);
+
+    // Apply incremental updates to relevant stores
+    if (stateType === 'projects' && Array.isArray(stateData)) {
+      const projectsStore = useProjectsStore();
+      projectsStore.setProjects(stateData);
+    } else if (stateType === 'tasks' && stateData?.tasks) {
+      const dashboardStore = useDashboardStore();
+      dashboardStore.tasks = stateData.tasks;
+    } else if (stateType === 'reviews' && stateData?.reviews) {
+      const dashboardStore = useDashboardStore();
+      dashboardStore.reviews = stateData.reviews;
+    }
   }
 
   function handleSyncFull(data: WsMessage) {
     // Received full state snapshot from server
     const { stateData } = data;
     console.log('[Sync] Full state received', stateData?.projects?.length || 0, 'projects');
+
+    // Apply full state to all relevant stores
+    if (stateData?.projects) {
+      const projectsStore = useProjectsStore();
+      projectsStore.setProjects(stateData.projects);
+    }
+    if (stateData?.tasks) {
+      const dashboardStore = useDashboardStore();
+      dashboardStore.tasks = stateData.tasks;
+    }
+    if (stateData?.reviews) {
+      const dashboardStore = useDashboardStore();
+      dashboardStore.reviews = stateData.reviews;
+    }
   }
 
   function handleAgentOnline(data: WsMessage) {
@@ -505,6 +532,9 @@ export const useChatStore = defineStore('chat', () => {
 
     try {
       const result = await dashboardApi.batchCreateTasks(projectName, tasks);
+      // Sync created tasks to dashboardStore
+      const dashStore = useDashboardStore();
+      result.tasks.forEach(t => dashStore.tasks.unshift(t));
       addSystemMessage(`AI 建议的任务已自动创建 (${result.tasks.length} 个): ${result.tasks.map(t => `#${t.id} ${t.title}`).join(', ')}`);
     } catch (err: any) {
       addSystemMessage(`自动创建任务失败: ${err.message || '未知错误'}`);
@@ -522,6 +552,9 @@ export const useChatStore = defineStore('chat', () => {
         priority: parsed.priority || 'medium',
         status: parsed.status || 'backlog',
       });
+      // Sync created task to dashboardStore
+      const dashStore = useDashboardStore();
+      dashStore.tasks.unshift(task);
       addSystemMessage(`任务已创建: #${task.id} ${task.title} (优先级: ${task.priority}, 状态: ${task.status})`);
       return true;
     } catch (err: any) {

@@ -16,6 +16,8 @@ import { getSharedScanner, resetSharedScanner } from '../../analyzer/designScann
 import { getSharedFixer, resetSharedFixer } from '../../analyzer/agentFixer';
 import type { AIConfig } from '../../analyzer/aiProvider';
 import { createLogger } from '../../utils/logger';
+import { config } from '../../config';
+import { syncServer } from '../../sync/syncServer';
 
 const logger = createLogger('reviews');
 
@@ -161,11 +163,22 @@ export function registerReviewRoutes(app: Express): void {
 
     const db = await getDatabase();
     const project = db.getProject(projectName);
-    if (!project) throw createError('Project not found', 404);
 
-    const reviews = status === 'pending'
-      ? db.getPendingReviews(project.id)
-      : db.getReviews(project.id);
+    let reviews: any[] = [];
+    if (project) {
+      reviews = status === 'pending'
+        ? db.getPendingReviews(project.id)
+        : db.getReviews(project.id);
+    }
+
+    // In sync mode, fallback to cached state from agent if local DB is empty
+    if (config.sync.enabled && reviews.length === 0) {
+      const cached = syncServer.getCachedState(1);
+      if (cached?.reviews) {
+        reviews = cached.reviews;
+        logger.info(`Serving ${reviews.length} reviews from sync cache`);
+      }
+    }
 
     res.json({ reviews });
   }));
@@ -272,7 +285,7 @@ export function registerReviewRoutes(app: Express): void {
               project_id: review.project_id,
               title: `Review confirmed: ${review.title}`,
               description: review.description || review.title,
-              status: 'done',
+              status: 'in_progress',
               priority: 'low',
               estimated: null,
             });
@@ -319,7 +332,7 @@ export function registerReviewRoutes(app: Express): void {
               project_id: review.project_id,
               title: `Fix completed: ${review.title}`,
               description: review.description || review.title,
-              status: 'done',
+              status: 'in_progress',
               priority: 'low',
               estimated: null,
             });
@@ -380,7 +393,7 @@ export function registerReviewRoutes(app: Express): void {
           project_id: review.project_id,
           title: `Review confirmed: ${review.title}`,
           description: review.description || review.title,
-          status: 'done',
+          status: 'in_progress',
           priority: 'low',
           estimated: null,
         });
@@ -438,7 +451,7 @@ export function registerReviewRoutes(app: Express): void {
         project_id: review.project_id,
         title: `Fix completed: ${review.title}`,
         description: review.description || review.title,
-        status: 'done',
+        status: 'in_progress',
         priority: 'low',
         estimated: null,
       });

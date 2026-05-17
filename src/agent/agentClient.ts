@@ -1,12 +1,15 @@
 /**
  * Agent Client
- * Local agent that connects to the server, receives commands, executes locally
+ * Local agent that connects to the server, receives commands, executes locally.
+ * Also handles remote desktop: captures screen periodically, relays input events.
  */
 
 import WebSocket from 'ws';
 import * as os from 'os';
 import { createLogger } from '../utils/logger';
 import { syncClient } from '../sync/syncClient';
+import { screenCapture } from '../remote/screenCapture';
+import { inputSimulator } from '../remote/inputSimulator';
 
 const logger = createLogger('agent-client');
 
@@ -14,6 +17,8 @@ export interface AgentClientConfig {
   serverUrl: string;   // e.g., 'ws://myserver:38888/ws/agent'
   token: string;
   name: string;
+  /** Enable remote desktop screen streaming */
+  remoteDesktop?: boolean;
 }
 
 export class AgentClient {
@@ -25,6 +30,11 @@ export class AgentClient {
   private maxReconnectAttempts = 50;
   private agentId: string = '';
   private authenticated = false;
+
+  // Remote desktop state
+  private remoteWs: WebSocket | null = null;
+  private screenCaptureInterval: NodeJS.Timeout | null = null;
+  private remoteAuthenticated = false;
 
   constructor(config: AgentClientConfig) {
     this.config = config;
@@ -63,6 +73,7 @@ export class AgentClient {
         this.authenticated = false;
         this.stopHeartbeat();
         syncClient.stop();
+        this.stopRemoteDesktop();
         this.scheduleReconnect();
       });
 
@@ -82,6 +93,7 @@ export class AgentClient {
     this.maxReconnectAttempts = 0; // Prevent reconnect
     this.stopHeartbeat();
     syncClient.stop();
+    this.stopRemoteDesktop();
 
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
@@ -94,6 +106,152 @@ export class AgentClient {
     }
 
     logger.info('Disconnected from server');
+  }
+
+  // ─── Remote Desktop ──────────────────────────────────────────────
+
+  /**
+   * Start remote desktop connection to /ws/remote
+   */
+  private startRemoteDesktop(): void {
+    if (!this.config.remoteDesktop) return;
+
+    // Derive remote URL from agent server URL
+    const remoteUrl = this.config.serverUrl.replace('/ws/agent', '/ws/remote');
+    logger.info(`Starting remote desktop connection: ${remoteUrl}`);
+
+    try {
+      this.remoteWs = new WebSocket(remoteUrl);
+
+      this.remoteWs.on('open', () => {
+        logger.info('Remote desktop connected');
+        this.remoteAuthenticated = false;
+
+        // Authenticate
+        this.remoteWs!.send(JSON.stringify({
+          type: 'remote.auth',
+          token: this.config.token,
+          role: 'agent',
+          name: this.config.name,
+          hostname: os.hostname(),
+        }));
+      });
+
+      this.remoteWs.on('message', (data: Buffer) => {
+        this.handleRemoteMessage(data.toString());
+      });
+
+      this.remoteWs.on('close', () => {
+        logger.info('Remote desktop disconnected');
+        this.remoteAuthenticated = false;
+        this.stopScreenCapture();
+        // Reconnect after delay
+        setTimeout(() => {
+          if (this.config.remoteDesktop) {
+            this.startRemoteDesktop();
+          }
+        }, 5000);
+      });
+
+      this.remoteWs.on('error', (error: Error) => {
+        logger.error(`Remote desktop error: ${error.message}`);
+      });
+    } catch (error: any) {
+      logger.error(`Remote desktop connection failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Handle messages from remote desktop server
+   */
+  private handleRemoteMessage(raw: string): void {
+    try {
+      const message = JSON.parse(raw);
+
+      switch (message.type) {
+        case 'remote.auth_ok':
+          this.remoteAuthenticated = true;
+          logger.info('Remote desktop authenticated');
+          // Start screen capture streaming
+          this.startScreenCapture();
+          break;
+
+        case 'remote.input':
+          // Simulate input on local machine
+          this.handleRemoteInput(message);
+          break;
+
+        case 'remote.pong':
+          break;
+
+        default:
+          break;
+      }
+    } catch (error: any) {
+      logger.error(`Remote message parse error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Handle input event from remote browser
+   */
+  private async handleRemoteInput(message: any): Promise<void> {
+    if (message.mouse) {
+      await inputSimulator.mouse(message.mouse);
+    }
+    if (message.keyboard) {
+      await inputSimulator.keyboard(message.keyboard);
+    }
+  }
+
+  /**
+   * Start periodic screen capture and streaming
+   */
+  private startScreenCapture(): void {
+    if (this.screenCaptureInterval) return;
+
+    const captureAndSend = async () => {
+      if (!this.remoteWs || this.remoteWs.readyState !== WebSocket.OPEN) return;
+
+      try {
+        const buffer = await screenCapture.capture({
+          quality: 40,
+          scale: 0.5,
+          maxWidth: 1280,
+        });
+
+        if (buffer) {
+          // Send as base64
+          this.remoteWs.send(JSON.stringify({
+            type: 'remote.screen',
+            data: buffer.toString('base64'),
+          }));
+        }
+      } catch (error: any) {
+        logger.error(`Screen capture failed: ${error.message}`);
+      }
+    };
+
+    // Capture immediately, then every 500ms (2 fps for bandwidth efficiency)
+    captureAndSend();
+    this.screenCaptureInterval = setInterval(captureAndSend, 500);
+    logger.info('Screen capture started (2 fps)');
+  }
+
+  private stopScreenCapture(): void {
+    if (this.screenCaptureInterval) {
+      clearInterval(this.screenCaptureInterval);
+      this.screenCaptureInterval = null;
+    }
+  }
+
+  private stopRemoteDesktop(): void {
+    this.stopScreenCapture();
+    if (this.remoteWs) {
+      this.remoteWs.close(1000, 'Agent disconnect');
+      this.remoteWs = null;
+    }
+    this.remoteAuthenticated = false;
   }
 
   /**
@@ -116,6 +274,8 @@ export class AgentClient {
           this.startHeartbeat();
           // Start sync client
           syncClient.start(this.agentId, this.ws!);
+          // Start remote desktop if enabled
+          this.startRemoteDesktop();
           break;
 
         case 'pong':

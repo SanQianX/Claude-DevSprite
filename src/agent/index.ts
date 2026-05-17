@@ -23,14 +23,16 @@ Usage:
   claude-dev-sprite agent [options]
 
 Options:
-  --server <url>    Server WebSocket URL (e.g., ws://myserver:38888/ws/agent)
-  --token <token>   Agent authentication token
-  --name <name>     Agent name (default: hostname)
-  --help            Show this help message
+  --server <url>        Server WebSocket URL (e.g., ws://myserver:38888/ws/agent)
+  --token <token>       Agent authentication token
+  --name <name>         Agent name (default: hostname)
+  --remote-desktop      Enable remote desktop screen streaming
+  --help                Show this help message
 
 Examples:
   claude-dev-sprite agent --server ws://myserver:38888/ws/agent --token my-secret-token
   claude-dev-sprite agent --server ws://myserver:38888/ws/agent --token my-secret-token --name office-pc
+  claude-dev-sprite agent --server ws://myserver:38888/ws/agent --token my-secret-token --remote-desktop
 `);
 }
 
@@ -65,6 +67,7 @@ export async function runAgent(argv?: { server?: string; token?: string; name?: 
     serverUrl: wsUrl,
     token,
     name: name || require('os').hostname(),
+    remoteDesktop: hasFlag(args, '--remote-desktop'),
   };
 
   const client = new AgentClient(agentConfig);

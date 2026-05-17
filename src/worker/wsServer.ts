@@ -14,6 +14,7 @@ import { relayManager } from '../relay/relayManager';
 import { verifyToken } from '../relay/auth';
 import { config } from '../config';
 import { syncServer } from '../sync/syncServer';
+import { remoteServer } from '../remote/remoteServer';
 
 const logger = createLogger('ws-server');
 
@@ -44,12 +45,14 @@ export class WsServer {
 
   /**
    * Attach WebSocket server to existing HTTP server
+   * Uses noServer mode to manually route upgrade requests by path,
+   * preventing path prefix conflicts between /ws and /ws/agent.
    * @param httpServer - The Express HTTP server instance
    */
   attach(httpServer: Server): void {
+    // Main WSS for browser clients at /ws
     this.wss = new WebSocketServer({
-      server: httpServer,
-      path: '/ws',
+      noServer: true,
       maxPayload: 1024 * 1024, // 1MB max message size
     });
 
@@ -61,27 +64,10 @@ export class WsServer {
       logger.error(`WebSocket server error: ${error.message}`);
     });
 
-    // Start heartbeat check every 30 seconds
-    this.heartbeatInterval = setInterval(() => {
-      this.checkHeartbeats();
-      // Also check agent heartbeats
-      if (config.sync.enabled) {
-        const stale = relayManager.checkHeartbeats();
-        for (const agentId of stale) {
-          const agent = relayManager.getAgent(agentId);
-          if (agent) {
-            syncServer.handleAgentOffline(agent.userId);
-          }
-          relayManager.removeAgent(agentId);
-        }
-      }
-    }, 30000);
-
-    // Agent WebSocket server (only if sync is enabled)
+    // Agent WSS at /ws/agent (only if sync is enabled)
     if (config.sync.enabled) {
       this.agentWss = new WebSocketServer({
-        server: httpServer,
-        path: '/ws/agent',
+        noServer: true,
         maxPayload: 1024 * 1024,
       });
 
@@ -95,6 +81,27 @@ export class WsServer {
 
       logger.info('Agent WebSocket server attached at /ws/agent');
     }
+
+    // Manual upgrade routing to avoid path prefix conflicts
+    httpServer.on('upgrade', (req: IncomingMessage, socket: any, head: Buffer) => {
+      const pathname = new URL(req.url || '/', `http://${req.headers.host}`).pathname;
+
+      if (pathname === '/ws/agent' && this.agentWss) {
+        this.agentWss.handleUpgrade(req, socket, head, (ws) => {
+          this.agentWss!.emit('connection', ws, req);
+        });
+      } else if (pathname === '/ws/remote') {
+        // Route to remote desktop server
+        remoteServer.handleUpgrade(req, socket, head);
+      } else if (pathname === '/ws') {
+        this.wss!.handleUpgrade(req, socket, head, (ws) => {
+          this.wss!.emit('connection', ws, req);
+        });
+      } else {
+        // Unknown WebSocket path — reject
+        socket.destroy();
+      }
+    });
 
     logger.info('WebSocket server attached to HTTP server at /ws');
   }
@@ -183,7 +190,7 @@ export class WsServer {
     logger.info(`Client disconnected: ${clientId} (code: ${code}, reason: ${reason}, remaining: ${this.clients.size})`);
 
     // Notify handler about disconnection
-    this.handler.handleDisconnect(clientId);
+    this.handler.handleDisconnect(clientId, client.ws);
   }
 
   /**

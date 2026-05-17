@@ -21,6 +21,7 @@ import { sseBroadcaster } from './sseBroadcaster';
 import { analysisTracker } from './analysisTracker';
 import { WsServer } from './wsServer';
 import { SessionManager } from './sessionManager';
+import { remoteServer } from '../remote/remoteServer';
 
 let analyzer: Analyzer | null = null;
 
@@ -122,6 +123,9 @@ export async function startServer(): Promise<void> {
   // Initialize and attach WebSocket server
   const wsServer = new WsServer(sessionManager);
   wsServer.attach(httpServer);
+
+  // Attach remote desktop server
+  remoteServer.attach(httpServer);
 
   // Start listening
   httpServer.listen(config.server.port, () => {

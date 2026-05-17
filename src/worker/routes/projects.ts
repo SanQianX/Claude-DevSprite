@@ -13,6 +13,8 @@ import type { Express, Request, Response } from 'express';
 import { getProjectDiscoveryService } from '../../services/projectDiscovery';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { createLogger } from '../../utils/logger';
+import { config } from '../../config';
+import { syncServer } from '../../sync/syncServer';
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
@@ -55,7 +57,17 @@ export function registerProjectRoutes(app: Express): void {
   app.get('/api/projects', asyncHandler(async (req: Request, res: Response) => {
     try {
       const projectDiscovery = getProjectDiscoveryService();
-      const projects = await projectDiscovery.getAllProjects();
+      let projects = await projectDiscovery.getAllProjects();
+
+      // In sync mode, fallback to cached state from agent if local DB is empty
+      if (config.sync.enabled && projects.length === 0) {
+        const cached = syncServer.getCachedState(1); // userId=1
+        if (cached?.projects) {
+          projects = cached.projects;
+          logger.info(`Serving ${projects.length} projects from sync cache`);
+        }
+      }
+
       res.json({ projects });
     } catch (error) {
       logger.error('Error getting projects', error);

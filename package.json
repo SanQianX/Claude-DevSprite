@@ -1,6 +1,6 @@
 {
   "name": "claude-dev-sprite",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Auto-detect Git commits and generate knowledge base docs",
   "main": "dist/worker/index.js",
   "bin": {
@@ -39,6 +39,9 @@
     "gray-matter": "^4.0.3",
     "highlight.js": "^11.9.0",
     "marked": "^12.0.1",
+    "node-screenshots": "^0.2.8",
+    "screenshot-desktop": "^1.15.4",
+    "sharp": "^0.34.5",
     "simple-git": "^3.23.0",
     "sql.js": "^1.11.0",
     "ws": "^8.20.0"
